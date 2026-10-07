@@ -75,6 +75,17 @@ def test_lookup_ing_shows_chord(app, tmp_path):
     assert win.lookup_tab.keyboard._fingers == frozenset({(4, "L")})
 
 
+def test_lookup_t_shows_chord(app, tmp_path):
+    # Regression: "t" was parsed as a (thumb) chord token and never text-searched.
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    inbox = Inbox(tmp_path / "inbox.json")
+    win = MainWindow(config, inbox)
+    win.lookup_tab.query_edit.setText("t")
+    assert win.lookup_tab.results.count() == 1
+    assert "[KB]t" in win.lookup_tab.results.item(0).text()
+    assert win.lookup_tab.keyboard._fingers == frozenset({(2, "M"), (3, "M")})
+
+
 def test_lookup_pending_inbox_hint(app, tmp_path):
     config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
     inbox = Inbox(tmp_path / "inbox.json")

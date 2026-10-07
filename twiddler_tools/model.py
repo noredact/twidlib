@@ -267,8 +267,12 @@ def parse_chord_spec(spec: str) -> Chord:
         if not token:
             continue
         if token[0] in "Tt":
-            digits = "".join(ch for ch in token[1:] if ch.isdigit())
-            for ch in digits:
+            rest = token[1:]
+            if rest == "-":
+                continue  # explicit "no thumbs" marker (e.g. "T-")
+            if not rest or not rest.isdigit():
+                raise ValueError(f"invalid thumb token: {token!r}")
+            for ch in rest:
                 thumbs.add(ThumbKey(int(ch)))
         elif token[0] in "Ff":
             fingers.update(expand_finger_token(token[1:]))

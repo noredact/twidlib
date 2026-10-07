@@ -66,6 +66,14 @@ def test_parse_chord_spec_no_thumb_token():
     assert chord.thumbs == frozenset()
 
 
+def test_parse_chord_spec_rejects_lone_t():
+    # A bare "t"/"T" is a letter, not a chord, so it must not parse as one.
+    with pytest.raises(ValueError):
+        parse_chord_spec("t")
+    with pytest.raises(ValueError):
+        parse_chord_spec("T")
+
+
 def test_format_chord_round_trip():
     chord = parse_chord_spec("T12 F1LM 2MR")
     assert format_chord(chord) == "T12 F1LM 2MR"
