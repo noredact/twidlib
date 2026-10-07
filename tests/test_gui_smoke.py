@@ -381,6 +381,27 @@ def test_lookup_typing_replaces_highlight(app, tmp_path):
     assert fingers == frozenset({(2, "M"), (3, "R"), (4, "R")})
 
 
+def test_lookup_add_output_hands_off_to_editor(app, tmp_path):
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    inbox = Inbox(tmp_path / "inbox.json")
+    win = MainWindow(config, inbox)
+    lt = win.lookup_tab
+
+    # The button starts disabled and enables once keys are highlighted.
+    assert lt.add_output_btn.isEnabled() is False
+    lt.keyboard.set_active_keys(fingers=frozenset({(2, "R"), (2, "M")}))
+    lt._update_add_btn()
+    assert lt.add_output_btn.isEnabled() is True
+
+    lt.add_output_btn.click()
+
+    assert win.tabs.currentWidget() is win.chord_editor_tab
+    ed = win.chord_editor_tab
+    assert ed.keyboard.selected() == (frozenset(), frozenset({(2, "R"), (2, "M")}))
+    assert ed.add_btn.text() == "Add to queue"
+    assert ed.text_edit.text() == ""
+
+
 def test_export_queue_table_columns(app, tmp_path):
     config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
     inbox = Inbox(tmp_path / "inbox.json")

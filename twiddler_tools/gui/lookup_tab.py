@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -40,6 +40,8 @@ from .keyboard_widget import KeyboardWidget
 
 
 class LookupTab(QWidget):
+    add_output_requested = Signal(object)  # Chord
+
     def __init__(self, config, inbox, parent=None):
         super().__init__(parent)
         self.config = config
@@ -85,6 +87,7 @@ class LookupTab(QWidget):
         self.keyboard = KeyboardWidget()
         self.keyboard.set_selectable(True)
         self.keyboard.selection_changed.connect(self._on_keyboard_click)
+        self.keyboard.selection_changed.connect(self._update_add_btn)
 
         clear_col = QVBoxLayout()
         self._clear_spacer = QSpacerItem(
@@ -97,6 +100,10 @@ class LookupTab(QWidget):
         self.clear_btn = QPushButton("Clear")
         self.clear_btn.clicked.connect(self.clear_highlight)
         clear_col.addWidget(self.clear_btn)
+        self.add_output_btn = QPushButton("Add output")
+        self.add_output_btn.setEnabled(False)
+        self.add_output_btn.clicked.connect(self._request_add_output)
+        clear_col.addWidget(self.add_output_btn)
         clear_col.addStretch(1)
         body.addLayout(clear_col, 0)
 
@@ -135,6 +142,7 @@ class LookupTab(QWidget):
             self.results.clear()
             self.keyboard.clear()
             self.status.setText("")
+            self._update_add_btn()
             return
 
         chord = self._try_parse_chord(query)
@@ -150,6 +158,7 @@ class LookupTab(QWidget):
                 self.status.setText(
                     f"No binding on chord \u201c{format_chord(chord)}\u201d."
                 )
+                self._update_add_btn()
             return
 
         matches = find_by_text(self.config, query)
@@ -169,6 +178,7 @@ class LookupTab(QWidget):
                     f"No chord types \u201c{query}\u201d on the device or in your export queue."
                 )
             self.keyboard.clear()
+            self._update_add_btn()
 
     def show_special(self, index: int) -> None:
         data = self.special_combo.itemData(index)
@@ -254,12 +264,29 @@ class LookupTab(QWidget):
         self.query_edit.blockSignals(True)
         self.query_edit.clear()
         self.query_edit.blockSignals(False)
+        self._update_add_btn()
 
     def show_selected(self, row: int) -> None:
         if row < 0:
             self.keyboard.clear()
+            self._update_add_btn()
             return
         item = self.results.item(row)
         binding = item.data(Qt.UserRole)
         ak = active_keys(binding.chord)
         self.keyboard.set_active_keys(ak.thumbs, ak.fingers)
+        self._update_add_btn()
+
+    def _update_add_btn(self) -> None:
+        thumbs, fingers = self.keyboard.selected()
+        self.add_output_btn.setEnabled(bool(thumbs or fingers))
+
+    def _request_add_output(self) -> None:
+        thumbs, fingers = self.keyboard.selected()
+        if not thumbs and not fingers:
+            return
+        chord = Chord(
+            fingers=frozenset(FingerKey(r, c) for r, c in fingers),
+            thumbs=frozenset(ThumbKey(i) for i in thumbs),
+        )
+        self.add_output_requested.emit(chord)

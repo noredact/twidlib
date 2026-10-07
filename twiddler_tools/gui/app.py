@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
         self.config_tab.base_cfg_changed.connect(self.inbox_tab.set_base_cfg)
         self.chord_editor_tab.queue_changed.connect(self.inbox_tab.refresh)
         self.inbox_tab.edit_requested.connect(self._open_chord_editor)
+        self.lookup_tab.add_output_requested.connect(self._open_chord_editor_with_chord)
         self.config_tab.scale_changed.connect(self._apply_scale)
         self.config_tab.scale_changed.connect(self._size_to_fit)
         self.setCentralWidget(self.tabs)
@@ -71,6 +72,12 @@ class MainWindow(QMainWindow):
 
     def _open_chord_editor(self, text: str) -> None:
         self.chord_editor_tab.load_for_edit(text)
+        self.tabs.setCurrentWidget(self.chord_editor_tab)
+
+    def _open_chord_editor_with_chord(self, chord) -> None:
+        thumbs = frozenset(t.index for t in chord.thumbs)
+        fingers = frozenset((k.row, k.col) for k in chord.fingers)
+        self.chord_editor_tab.preload_chord(thumbs, fingers)
         self.tabs.setCurrentWidget(self.chord_editor_tab)
 
 

@@ -130,6 +130,23 @@ class ChordEditorTab(QWidget):
         self._edit_text = None
         self.add_btn.setText("Add to queue")
 
+    def preload_chord(
+        self,
+        thumbs: frozenset[int] | set[int],
+        fingers: frozenset[tuple[int, str]] | set[tuple[int, str]],
+    ) -> None:
+        """Start a fresh add with the given chord already highlighted.
+
+        Used by Chord Lookup's "Add output" so the user only has to type the
+        text for a chord they just verified on the keymap.
+        """
+        self._reset_edit_mode()
+        self.text_edit.clear()
+        self.keyboard.set_active_keys(thumbs=frozenset(thumbs), fingers=frozenset(fingers))
+        self._update_reserved()
+        self._status("Type the text to send, then click Add to queue.")
+        self.text_edit.setFocus()
+
     def _confirm_overwrite(self, message: str) -> bool:
         box = QMessageBox(self)
         box.setWindowTitle("Already exists")
