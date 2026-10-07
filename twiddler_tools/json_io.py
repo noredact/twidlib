@@ -1,7 +1,7 @@
 """Export a config to the tuner's custom-mapping JSON format.
 
 Grounded in the repo-root file
-'twiddler_cfg_mirrorwalk_nomcc_twiddler_as_V5_as_V7.json'.
+'test_json.json'.
 
 Chord code format:
   * Thumbs: an optional 'T<digits>+' prefix (digits from 0-4), omitted when no

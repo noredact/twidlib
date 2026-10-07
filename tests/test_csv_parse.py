@@ -5,7 +5,7 @@ import pytest
 from twiddler_tools.csv_io import parse_csv, render_csv
 from twiddler_tools.model import ActionKind, FingerKey
 
-SAMPLE = Path(__file__).resolve().parent.parent / "sample_export_csv.csv"
+SAMPLE = Path(__file__).resolve().parent.parent / "test_config.csv"
 
 
 @pytest.fixture(scope="module")

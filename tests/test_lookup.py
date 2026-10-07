@@ -13,7 +13,7 @@ from twiddler_tools.model import (
     parse_chord_spec,
 )
 
-SAMPLE = Path(__file__).resolve().parent.parent / "sample_export_csv.csv"
+SAMPLE = Path(__file__).resolve().parent.parent / "test_config.csv"
 
 
 @pytest.fixture(scope="module")

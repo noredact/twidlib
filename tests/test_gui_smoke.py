@@ -35,7 +35,7 @@ from twiddler_tools.model import (  # noqa: E402
     parse_chord_spec,
 )
 
-SAMPLE = Path(__file__).resolve().parent.parent / "sample_export_csv.csv"
+SAMPLE = Path(__file__).resolve().parent.parent / "test_config.csv"
 
 
 @pytest.fixture(scope="module")
@@ -234,7 +234,7 @@ def test_export_cfg_marks_exported(app, tmp_path):
     base = (
         Path(__file__).resolve().parent.parent
         / "sample_config_files"
-        / "mirrorwalk_nomcc_my_custom.cfg"
+        / "test_config1.cfg"
     )
     out = tmp_path / "out.cfg"
     summary = win.inbox_tab.export_cfg_to(str(base), str(out))

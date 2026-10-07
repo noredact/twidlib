@@ -20,7 +20,7 @@ from twiddler_tools.model import (
 
 MIRROR = (
     Path(__file__).resolve().parent.parent
-    / "twiddler_cfg_mirrorwalk_nomcc_twiddler_as_V5_as_V7.json"
+    / "test_json.json"
 )
 
 

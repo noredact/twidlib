@@ -9,9 +9,9 @@ from twiddler_tools import cfg_io
 from twiddler_tools.model import Chord, FingerKey, ThumbKey
 
 SAMPLES = Path(__file__).parent.parent / "sample_config_files"
-CUSTOM_CFG = SAMPLES / "mirrorwalk_nomcc_my_custom.cfg"
-CUSTOM_CSV = SAMPLES / "twiddler_cfg_mirrorwalk_nomcc_my_custom.csv"
-DEFAULT_CFG = SAMPLES / "mirrorwalk_nomcc_twiddler_as_V5_as_V7.cfg"
+CUSTOM_CFG = SAMPLES / "test_config1.cfg"
+CUSTOM_CSV = SAMPLES / "test_config1.csv"
+DEFAULT_CFG = SAMPLES / "test_config2.cfg"
 
 
 def _chord(**kwargs):
@@ -154,7 +154,7 @@ def test_system_action_mapping():
 def test_settings_round_trip(tmp_path, monkeypatch):
     from twiddler_tools import settings
 
-    sample = Path(__file__).parent.parent / "sample_export_csv.csv"
+    sample = Path(__file__).parent.parent / "test_config.csv"
     monkeypatch.setattr(settings, "state_path", lambda: tmp_path / "state.json")
 
     settings.save_last_config(str(sample), "csv")
