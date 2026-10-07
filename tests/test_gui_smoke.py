@@ -501,3 +501,36 @@ def test_config_scale_combo_updates_keymaps(app, tmp_path, monkeypatch):
     assert emitted[-1] == pytest.approx(0.6)
     assert win.chord_editor_tab.keyboard.sizeHint().height() == 360
     assert win.lookup_tab.keyboard.sizeHint().height() == 360
+
+
+def test_csv_to_cfg_exports(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    inbox = Inbox(tmp_path / "inbox.json")
+    win = MainWindow(config, inbox)
+
+    base = tmp_path / "base.cfg"
+    base.write_bytes(
+        (Path(__file__).resolve().parent.parent / "test_config.cfg").read_bytes()
+    )
+    out = tmp_path / "out.cfg"
+
+    def fake_open(parent, title, *args, **kwargs):
+        if "CSV" in title:
+            return str(SAMPLE), "CSV files (*.csv)"
+        return str(base), "CFG files (*.cfg)"
+
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(fake_open))
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(out), "CFG files (*.cfg)")),
+    )
+
+    win.config_tab.csv_to_cfg()
+
+    assert out.exists()
+    assert "146 chord" in win.config_tab.export_label.text()
+    back = cfg_io.cfg_to_config(cfg_io.parse_cfg(out.read_bytes()))
+    assert len(back.bindings) == 146

@@ -63,6 +63,12 @@ upload the .cfg. This allows the .cfg to be validated by the official
 software.</li>
 <li>Download the .cfg following the tuner instructions.</li>
 </ol>
+
+<h3>CSV to .cfg</h3>
+<p><b>CSV to .cfg\u2026</b> rebuilds a .cfg from an edited CSV. It treats the CSV
+as the complete config (every row becomes a binding) and takes only the
+settings/header from a base .cfg. Use it to turn a tuner-exported CSV that
+you\u2019ve edited into a file you can upload to the tuner.</p>
 """
 
 
@@ -75,6 +81,8 @@ class ConfigTab(QWidget):
         super().__init__(parent)
         self.config = config
         self.inbox = inbox
+        self.base_cfg: bytes | None = None
+        self._kind: str | None = self._kind_from_source(config.source)
 
         layout = QVBoxLayout(self)
 
@@ -85,9 +93,12 @@ class ConfigTab(QWidget):
         self.import_cfg_btn.clicked.connect(self.import_cfg)
         self.export_btn = QPushButton("Export Tutor JSON\u2026")
         self.export_btn.clicked.connect(self.export_json)
+        self.csv_to_cfg_btn = QPushButton("CSV to .cfg\u2026")
+        self.csv_to_cfg_btn.clicked.connect(self.csv_to_cfg)
         btn_row.addWidget(self.import_btn)
         btn_row.addWidget(self.import_cfg_btn)
         btn_row.addWidget(self.export_btn)
+        btn_row.addWidget(self.csv_to_cfg_btn)
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
 
@@ -142,6 +153,21 @@ class ConfigTab(QWidget):
         save_gui_scale(factor)
         self.scale_changed.emit(factor)
 
+    @staticmethod
+    def _kind_from_source(source: str) -> str | None:
+        lowered = (source or "").lower()
+        if lowered.endswith(".csv"):
+            return "csv"
+        if lowered.endswith(".cfg"):
+            return "cfg"
+        return None
+
+    def set_base_cfg(self, base_cfg: bytes | None) -> None:
+        """Remember the base .cfg bytes (and kind) loaded at startup."""
+        self.base_cfg = base_cfg
+        if base_cfg is not None:
+            self._kind = "cfg"
+
     def import_csv(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self, "Import tuner CSV export", "", "CSV files (*.csv);;All files (*)"
@@ -156,6 +182,8 @@ class ConfigTab(QWidget):
         self.path_label.setText(f"Loaded CSV: {path}")
         self.export_label.setText("")
         save_last_config(path, "csv")
+        self.base_cfg = None
+        self._kind = "csv"
         self.config_changed.emit(self.config)
         self.base_cfg_changed.emit(None)
 
@@ -175,6 +203,8 @@ class ConfigTab(QWidget):
         self.path_label.setText(f"Loaded .cfg: {path} (base for export)")
         self.export_label.setText("")
         save_last_config(path, "cfg")
+        self.base_cfg = raw
+        self._kind = "cfg"
         self.config_changed.emit(self.config)
         self.base_cfg_changed.emit(raw)
 
@@ -196,3 +226,70 @@ class ConfigTab(QWidget):
         if skipped:
             summary += f"  Skipped {len(skipped)} (system actions or multi-column rows)."
         return summary
+
+    def csv_to_cfg(self) -> None:
+        """Rebuild a .cfg from a CSV, reusing settings from a base .cfg."""
+        # 1. Pick the CSV: the loaded one if it came from a CSV, else ask.
+        if self._kind == "csv" and self.config.source:
+            csv_config = self.config
+            csv_path = self.config.source
+        else:
+            csv_path, _ = QFileDialog.getOpenFileName(
+                self, "Choose the CSV to convert", "", "CSV files (*.csv);;All files (*)"
+            )
+            if not csv_path:
+                return
+            try:
+                csv_config = load_csv(csv_path)
+            except Exception as exc:  # surface any parse problem to the user
+                QMessageBox.warning(self, "Import failed", str(exc))
+                return
+
+        # 2. Pick the base .cfg (for settings) if one isn't already loaded.
+        if self.base_cfg is not None:
+            base = self.base_cfg
+        else:
+            base_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "Choose a base .cfg for settings",
+                "",
+                "CFG files (*.cfg);;All files (*)",
+            )
+            if not base_path:
+                return
+            try:
+                base = Path(base_path).read_bytes()
+            except OSError as exc:
+                QMessageBox.warning(self, "Read failed", str(exc))
+                return
+
+        # 3. Build the .cfg.
+        try:
+            out = cfg_io.config_to_cfg(csv_config, base)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(
+                self,
+                "Conversion failed",
+                "Could not convert this CSV to a .cfg:\n\n"
+                + str(exc)
+                + "\n\nOnly tuner-exported CSVs are supported.",
+            )
+            return
+
+        # 4. Save it.
+        out_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export .cfg from CSV",
+            "twiddler_from_csv.cfg",
+            "CFG files (*.cfg);;All files (*)",
+        )
+        if not out_path:
+            return
+        try:
+            Path(out_path).write_bytes(out)
+        except OSError as exc:
+            QMessageBox.warning(self, "Write failed", str(exc))
+            return
+        self.export_label.setText(
+            f"Exported {len(csv_config.bindings)} chord(s) from CSV to {out_path}."
+        )

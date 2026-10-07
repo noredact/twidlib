@@ -178,3 +178,71 @@ def test_settings_missing_file_falls_back_empty(tmp_path, monkeypatch):
     config, base = settings.load_last_config()
     assert len(config.bindings) == 0
     assert base is None
+
+
+def test_config_to_cfg_round_trip():
+    for path in (CUSTOM_CFG, DEFAULT_CFG):
+        raw = path.read_bytes()
+        config = cfg_io.cfg_to_config(cfg_io.parse_cfg(raw))
+        rebuilt = cfg_io.config_to_cfg(config, raw)
+        config2 = cfg_io.cfg_to_config(cfg_io.parse_cfg(rebuilt))
+        a = [(b.raw_thumbs, b.raw_fingers, b.raw_action) for b in config.bindings]
+        b = [(b.raw_thumbs, b.raw_fingers, b.raw_action) for b in config2.bindings]
+        assert a == b
+        # Settings are preserved from the base header.
+        base = cfg_io.parse_cfg(raw)
+        out = cfg_io.parse_cfg(rebuilt)
+        assert out.flags == base.flags
+        assert out.idle_time == base.idle_time
+        assert out.mouse_sensitivity == base.mouse_sensitivity
+        assert out.key_repeat_delay == base.key_repeat_delay
+
+
+def test_action_to_record_shifted_single_key():
+    # '<RShift>=</RShift>' is stored as one keyboard record: RShift + the '=' key.
+    ctype, d0, d1, macro = cfg_io.action_to_record("[KB]<RShift>=</RShift>")
+    assert ctype == cfg_io.OP_KEYBOARD
+    assert (d0, d1) == (0x20, 0x2E)
+    assert macro is None
+
+
+def test_action_to_record_macro():
+    ctype, d0, d1, macro = cfg_io.action_to_record("[KB]<RShift>t</RShift>he")
+    assert ctype == cfg_io.OP_MACRO
+    assert macro == [(0x20, 0x17), (0x00, 0x0B), (0x00, 0x08)]  # RShift+t, h, e
+    assert (d0, d1) == (0, 0)  # offset is assigned later
+
+
+def test_action_to_record_system_and_mouse():
+    assert cfg_io.action_to_record("[SYS][Sleep]<Sleep Sleep Now>")[:3] == (cfg_io.OP_SYSTEM, 1, 0)
+    assert cfg_io.action_to_record("[SYS][Mouse]<Mouse Left Click>")[:3] == (cfg_io.OP_MOUSE, 1, 0)
+
+
+def test_config_to_cfg_from_csv():
+    from twiddler_tools.csv_io import load_csv
+
+    csv_config = load_csv(str(CUSTOM_CSV))
+    out = cfg_io.config_to_cfg(csv_config, CUSTOM_CFG.read_bytes())
+    back = cfg_io.cfg_to_config(cfg_io.parse_cfg(out))
+    csv_rows = {(b.raw_thumbs, b.raw_fingers, b.raw_action) for b in csv_config.bindings}
+    back_rows = {(b.raw_thumbs, b.raw_fingers, b.raw_action) for b in back.bindings}
+    assert csv_rows == back_rows
+
+
+def test_config_to_cfg_rejects_unknown_action():
+    from twiddler_tools.model import Binding, Config
+
+    bad = Config(
+        bindings=[
+            Binding(
+                chord=Chord(fingers=frozenset({_f(1, "L")})),
+                action=cfg_io.parse_action("[KB]a"),
+                raw_thumbs="",
+                raw_fingers="1L",
+                raw_action="[KB]<NotARealKey>",
+            )
+        ],
+        source="",
+    )
+    with pytest.raises(ValueError):
+        cfg_io.config_to_cfg(bad, CUSTOM_CFG.read_bytes())

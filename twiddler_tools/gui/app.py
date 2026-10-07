@@ -80,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     window = MainWindow(config, Inbox())
     if base_cfg is not None:
         window.inbox_tab.set_base_cfg(base_cfg)
+        window.config_tab.set_base_cfg(base_cfg)
     window.show()
     return app.exec()
 

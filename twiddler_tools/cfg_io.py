@@ -44,6 +44,7 @@ modifier (0x20 = right shift) + keycode. Terminated by 4 zero bytes.
 
 from __future__ import annotations
 
+import re
 import struct
 from dataclasses import dataclass, field
 
@@ -390,4 +391,173 @@ def add_macros(base: bytes, additions: list[tuple[Chord, str]]) -> bytes:
     # Update file length (bytes 2-3) and chord count (bytes 8-9).
     struct.pack_into("<H", out, 2, len(out))
     struct.pack_into("<H", out, 8, cfg.num_chords + len(additions))
+    return bytes(out)
+
+
+# --- CSV/config -> .cfg encoder -------------------------------------------
+
+_MOD_BITS = {
+    "LCtrl": 0x01, "LShift": 0x02, "LAlt": 0x04, "LGUI": 0x08,
+    "RCtrl": 0x10, "RShift": 0x20, "RAlt": 0x40, "RGUI": 0x80,
+}
+_NAME_TO_KEY = {name: key for key, name in _KEYCODE_NAME.items()}
+_NAME_TO_KEY["Return"] = 0x28  # tuner docs also accept <Return>
+_SYSTEM_IDS = {text: cid for cid, text in SYSTEM_ACTIONS.items()}
+_MOUSE_IDS = {"Left": 1, "Right": 2, "Middle": 4}
+
+
+def _base_key(ch: str) -> int | None:
+    """The base (unshifted) HID keycode for a character, ignoring case."""
+    if ch in _CHAR_TO_KEY:
+        return _CHAR_TO_KEY[ch]
+    if ch in _SHIFTED_CHARS:
+        return _CHAR_TO_KEY[_SHIFTED_CHARS[ch]]
+    if ch.isalpha():
+        return _CHAR_TO_KEY[ch.lower()]
+    return None
+
+
+def _encode_content(content: str, mod: int) -> list[tuple[int, int]]:
+    """Encode the inside of a '<Mod>...</Mod>' region into (mod, key) commands."""
+    out: list[tuple[int, int]] = []
+    i = 0
+    n = len(content)
+    while i < n:
+        if content[i] == "<":
+            j = content.find(">", i)
+            if j == -1:
+                raise ValueError(f"unterminated key tag: {content!r}")
+            name = content[i + 1 : j]
+            key = _NAME_TO_KEY.get(name)
+            if key is None:
+                raise ValueError(f"unknown key tag: <{name}>")
+            out.append((mod, key))
+            i = j + 1
+        else:
+            k = content.find("<", i)
+            if k == -1:
+                k = n
+            for ch in content[i:k]:
+                key = _base_key(ch)
+                if key is None:
+                    raise ValueError(f"cannot encode character: {ch!r}")
+                out.append((mod, key))
+            i = k
+    return out
+
+
+def _split_commands(inner: str) -> list[tuple[int, int]]:
+    """Split a '[KB]...' inner string into (modifier, keycode) commands.
+
+    Mirrors the tuner's action syntax: '<Mod>x</Mod>' applies the modifier to
+    each key in the region, standalone '<Key>' tags emit that key unmodified,
+    and everything else is literal text.
+    """
+    out: list[tuple[int, int]] = []
+    i = 0
+    n = len(inner)
+    while i < n:
+        if inner[i] == "<":
+            j = inner.find(">", i)
+            if j == -1:
+                raise ValueError(f"unterminated tag in action: {inner!r}")
+            name = inner[i + 1 : j]
+            if name in _MOD_BITS:
+                closing = f"</{name}>"
+                end = inner.find(closing, j + 1)
+                if end != -1:
+                    out.extend(_encode_content(inner[j + 1 : end], _MOD_BITS[name]))
+                    i = end + len(closing)
+                    continue
+            key = _NAME_TO_KEY.get(name)
+            if key is None:
+                raise ValueError(f"unknown key tag: <{name}>")
+            out.append((0, key))
+            i = j + 1
+        else:
+            k = inner.find("<", i)
+            if k == -1:
+                k = n
+            for ch in inner[i:k]:
+                if ch in _CHAR_TO_KEY:
+                    out.append((0, _CHAR_TO_KEY[ch]))
+                elif ch in _SHIFTED_CHARS:
+                    out.append(
+                        (_MOD_BITS["RShift"], _CHAR_TO_KEY[_SHIFTED_CHARS[ch]])
+                    )
+                elif ch.isalpha():
+                    out.append((_MOD_BITS["RShift"], _CHAR_TO_KEY[ch.lower()]))
+                else:
+                    raise ValueError(f"cannot encode character: {ch!r}")
+            i = k
+    return out
+
+
+def action_to_record(raw_action: str) -> tuple[int, int, int, list[tuple[int, int]] | None]:
+    """Encode one CSV action string into a .cfg record.
+
+    Returns (command_type, data0, data1, macro_entries). `macro_entries` is
+    None for non-macro records; for macro records it is the list of
+    (modifier, keycode) commands to store in the macro table.
+    """
+    if raw_action.startswith("[SYS]"):
+        if raw_action in _SYSTEM_IDS:
+            return OP_SYSTEM, _SYSTEM_IDS[raw_action], 0, None
+        m = re.match(r"^\[SYS\]\[Mouse\]<Mouse (Left|Right|Middle) Click>$", raw_action)
+        if m:
+            return OP_MOUSE, _MOUSE_IDS[m.group(1)], 0, None
+        m = re.match(r"^\[SYS\]\[Delay\]<(\d+)ms>$", raw_action)
+        if m:
+            value = int(m.group(1)) // 10
+            return OP_DELAY, value & 0xFF, (value >> 8) & 0xFF, None
+        raise ValueError(f"unsupported system action: {raw_action!r}")
+
+    if not raw_action.startswith("[KB]"):
+        raise ValueError(f"unsupported action: {raw_action!r}")
+
+    commands = _split_commands(raw_action[4:])
+    if not commands:
+        raise ValueError(f"empty keyboard action: {raw_action!r}")
+    if len(commands) == 1:
+        mod, key = commands[0]
+        return OP_KEYBOARD, mod & 0xFF, key & 0xFF, None
+    return OP_MACRO, 0, 0, commands
+
+
+def config_to_cfg(config: Config, base: bytes) -> bytes:
+    """Rebuild a .cfg from a Config, reusing the header/settings from `base`.
+
+    The CSV/config is authoritative for the bindings: every binding becomes a
+    record, sorted by combo. The base .cfg contributes only the header (tag,
+    settings, fixed lookup table), which is preserved verbatim except for the
+    chord count (bytes 8-9) and file length (bytes 2-3).
+    """
+    base_cfg = parse_cfg(base)
+
+    records: list[tuple[int, int, int, int]] = []
+    entries: list[list[tuple[int, int]] | None] = []
+    for b in config.bindings:
+        combo = chord_to_combo(b.chord)
+        if combo == 0:
+            raise ValueError(f"chord has no keys: {b.raw_action!r}")
+        ctype, d0, d1, macro = action_to_record(b.raw_action)
+        records.append((combo, ctype, d0, d1))
+        entries.append(macro)
+
+    ordered = sorted(zip(records, entries), key=lambda pair: pair[0][0])
+
+    table = bytearray()
+    out_records = bytearray()
+    for (combo, ctype, d0, d1), macro in ordered:
+        if ctype == OP_MACRO:
+            offset = len(table)
+            for mod, key in macro:
+                table += bytes([OP_KEYBOARD, mod & 0xFF, key & 0xFF, 0])
+            table += b"\x00\x00\x00\x00"
+            d0, d1 = offset & 0xFF, (offset >> 8) & 0xFF
+        out_records += struct.pack("<I", combo) + bytes([ctype, d0, d1, 0])
+
+    out = bytearray(bytes(base[:HEADER_SIZE]) + bytes(out_records) + bytes(table))
+    struct.pack_into("<H", out, 2, len(out))
+    struct.pack_into("<H", out, 8, len(records))
     return bytes(out)
