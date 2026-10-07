@@ -238,7 +238,9 @@ class ChordEditorTab(QWidget):
 
             if text_collision is not None:
                 self.inbox.remove(text_collision)
-            self.inbox.update(self._edit_text, new_text=text, chord_id=chord_id)
+            self.inbox.update(
+                self._edit_text, new_text=text, chord_id=chord_id, override=bool(used)
+            )
             self.text_edit.clear()
             self.keyboard.clear()
             self._reset_edit_mode()
@@ -247,8 +249,15 @@ class ChordEditorTab(QWidget):
             return
 
         if used:
-            what = ", ".join(display_action(b.raw_action) for b in used)
-            self._status(f"That chord is already on the device: {what}.")
+            if not self._confirm_reassign(used, text):
+                return
+            self.inbox.add(text, chord_id=chord_id, override=True)
+            self.text_edit.clear()
+            self.keyboard.clear()
+            self.queue_changed.emit()
+            self._status(
+                f"Reassigned \u201c{display_text(text)}\u201d to the export queue ({chord_id})."
+            )
             return
         if queue_used:
             who = ", ".join(
@@ -262,6 +271,19 @@ class ChordEditorTab(QWidget):
         self.keyboard.clear()
         self.queue_changed.emit()
         self._status(f"Added \u201c{display_text(text)}\u201d to the export queue ({chord_id}).")
+
+    def _confirm_reassign(self, used_bindings, new_text: str) -> bool:
+        current = ", ".join(display_action(b.raw_action) for b in used_bindings)
+        box = QMessageBox(self)
+        box.setWindowTitle("Chord already on device")
+        box.setText(f"This chord currently types: {current}.")
+        box.setInformativeText(
+            f"Reassign it to \u201c{display_text(new_text)}\u201d? The existing "
+            "binding will be replaced when you export."
+        )
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Yes)
+        box.button(QMessageBox.Yes).setText("Reassign")
+        return box.exec() == QMessageBox.Yes
 
     def _status(self, message: str) -> None:
         self.status.setText(message)

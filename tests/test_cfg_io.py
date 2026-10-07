@@ -134,6 +134,28 @@ def test_add_macro_empty_chord_raises():
         cfg_io.add_macros(base, [(Chord(), "nothing")])
 
 
+def test_replace_macros():
+    base = CUSTOM_CFG.read_bytes()
+    # "ing" is F4L (combo 0x8000) in the custom cfg; reassign it to "zz".
+    replacements = [(Chord(fingers=frozenset({_f(4, "L")})), "zz")]
+    out = cfg_io.replace_macros(base, replacements)
+
+    assert cfg_io.parse_cfg(out).num_chords == cfg_io.parse_cfg(base).num_chords
+    macros = cfg_io.macros_in(out)
+    assert macros[0x8000] == "zz"
+    assert macros[0x4000] == "the"  # untouched
+    import struct
+    assert struct.unpack_from("<H", out, 2)[0] == len(out)
+
+
+def test_replace_macros_unknown_chord_raises():
+    base = CUSTOM_CFG.read_bytes()
+    # F2R+F2M is not bound in the custom cfg.
+    chord = Chord(fingers=frozenset({_f(2, "R"), _f(2, "M")}))
+    with pytest.raises(ValueError):
+        cfg_io.replace_macros(base, [(chord, "x")])
+
+
 def test_cfg_to_config_matches_csv():
     raw = CUSTOM_CFG.read_bytes()
     config = cfg_io.cfg_to_config(cfg_io.parse_cfg(raw))

@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from .. import cfg_io
 from ..inbox import Inbox
 from ..lookup import find_by_chord, find_by_text
-from ..model import display_text, format_chord, parse_chord_spec
+from ..model import display_action, display_text, format_chord, parse_chord_spec
 
 
 class InboxTab(QWidget):
@@ -178,10 +178,13 @@ class InboxTab(QWidget):
 
             used = find_by_chord(self.config, chord)
             if used:
-                uses = "\n".join(
-                    f"  {format_chord(b.chord)}  \u2192  {b.raw_action}" for b in used
-                )
-                self.flag_label.setText(f"\u26a0 That chord is already used:\n{uses}")
+                if not self._confirm_reassign(used, text):
+                    return
+                self.inbox.add(text, chord_id=format_chord(chord), override=True)
+                self.text_edit.clear()
+                self.chord_edit.clear()
+                self._clear_flag()
+                self.refresh()
                 return
 
             inbox_used = [
@@ -212,6 +215,19 @@ class InboxTab(QWidget):
             return
         self.inbox.remove(text)
         self.refresh()
+
+    def _confirm_reassign(self, used_bindings, new_text: str) -> bool:
+        current = ", ".join(display_action(b.raw_action) for b in used_bindings)
+        box = QMessageBox(self)
+        box.setWindowTitle("Chord already on device")
+        box.setText(f"This chord currently types: {current}.")
+        box.setInformativeText(
+            f"Reassign it to \u201c{display_text(new_text)}\u201d? The existing "
+            "binding will be replaced when you export."
+        )
+        box.setStandardButtons(QMessageBox.Cancel | QMessageBox.Yes)
+        box.button(QMessageBox.Yes).setText("Reassign")
+        return box.exec() == QMessageBox.Yes
 
     def _confirm_remove_exported(self, text: str) -> bool:
         box = QMessageBox(self)
@@ -301,6 +317,7 @@ class InboxTab(QWidget):
 
         used = {r.combo for r in base_cfg.records}
         additions = []
+        replacements = []
         skipped = []
         for item in self.inbox.pending():
             if not item.chord_id:
@@ -312,29 +329,44 @@ class InboxTab(QWidget):
                 skipped.append((item.text, str(exc)))
                 continue
             combo = cfg_io.chord_to_combo(chord)
-            if combo in used:
-                skipped.append((item.text, "chord already in .cfg"))
-                continue
-            used.add(combo)
-            additions.append((chord, item.text))
+            if item.override:
+                if combo not in used:
+                    skipped.append((item.text, "marked as reassign but chord not in .cfg"))
+                    continue
+                replacements.append((chord, item.text))
+            else:
+                if combo in used:
+                    skipped.append((item.text, "chord already in .cfg"))
+                    continue
+                used.add(combo)
+                additions.append((chord, item.text))
 
-        if not additions:
+        if not additions and not replacements:
             msg = "Nothing to export: no pending queue items with an unused chord."
             if skipped:
                 msg += "\nSkipped: " + "; ".join(f"{t} ({r})" for t, r in skipped)
             return msg
 
         try:
-            out = cfg_io.add_macros(base, additions)
+            out = base
+            if replacements:
+                out = cfg_io.replace_macros(out, replacements)
+            if additions:
+                out = cfg_io.add_macros(out, additions)
             Path(out_path).write_bytes(out)
         except (OSError, ValueError) as exc:
             return f"Export failed: {exc}"
 
-        for _, text in additions:
+        for _, text in additions + replacements:
             self.inbox.mark_exported(text)
         self.refresh()
 
-        summary = f"Exported {len(additions)} new chord(s) to {out_path} (marked as exported)."
+        parts = []
+        if additions:
+            parts.append(f"{len(additions)} new chord(s)")
+        if replacements:
+            parts.append(f"{len(replacements)} reassigned chord(s)")
+        summary = f"Exported {' and '.join(parts)} to {out_path} (marked as exported)."
         if skipped:
             summary += "\nSkipped: " + "; ".join(f"{t} ({r})" for t, r in skipped)
         return summary

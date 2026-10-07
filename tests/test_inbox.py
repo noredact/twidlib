@@ -91,3 +91,19 @@ def test_update_renames_text(tmp_path):
     item = inbox.find("the")
     assert item is not None
     assert item.chord_id == "F2M 3R 3M"
+
+
+def test_override_persists(tmp_path):
+    p = tmp_path / "inbox.json"
+    inbox = Inbox(p)
+    inbox.add("zz", chord_id="F2M 3R 4R", override=True)
+    reloaded = Inbox(p)
+    assert reloaded.find("zz").override is True
+
+
+def test_update_override(tmp_path):
+    inbox = Inbox(tmp_path / "inbox.json")
+    inbox.add("zz", chord_id="F2M 3R 4R")
+    assert inbox.find("zz").override is False
+    inbox.update("zz", override=True)
+    assert inbox.find("zz").override is True

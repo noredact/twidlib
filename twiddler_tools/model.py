@@ -149,6 +149,7 @@ class PendingChord:
     text: str
     status: str = "pending"  # "pending" | "exported"
     chord_id: str | None = None
+    override: bool = False  # True = reassign a chord already on the device
     created_at: str = ""
     notes: str = ""
 

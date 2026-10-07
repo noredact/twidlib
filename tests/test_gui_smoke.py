@@ -141,15 +141,27 @@ def test_inbox_flags_duplicate_text(app, tmp_path):
     assert win.inbox_tab.table.rowCount() == 1
 
 
-def test_inbox_flags_used_chord(app, tmp_path):
+def test_inbox_reassign_used_chord(app, tmp_path, monkeypatch):
     config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
     inbox = Inbox(tmp_path / "inbox.json")
     win = MainWindow(config, inbox)
     win.inbox_tab.text_edit.setText("zz")
     win.inbox_tab.chord_edit.setText("F2M 3R 4R")  # already bound to "or"
+
+    # Cancelling the confirmation adds nothing.
+    monkeypatch.setattr(win.inbox_tab, "_confirm_reassign", lambda used, text: False)
     win.inbox_tab.add()
-    assert "already used" in win.inbox_tab.flag_label.text()
+    assert inbox.find("zz") is None
     assert win.inbox_tab.table.rowCount() == 0
+
+    # Confirming queues it as a reassignment.
+    monkeypatch.setattr(win.inbox_tab, "_confirm_reassign", lambda used, text: True)
+    win.inbox_tab.add()
+    item = inbox.find("zz")
+    assert item is not None
+    assert item.override is True
+    assert item.chord_id == "F2M 3R 4R"
+    assert win.inbox_tab.table.rowCount() == 1
 
 
 def test_inbox_flags_duplicate_chord_between_items(app, tmp_path):
@@ -258,6 +270,27 @@ def test_export_cfg_marks_exported(app, tmp_path):
     assert macros[cfg_io.chord_to_combo(parse_chord_spec("F1L 1M"))] == "yy"
 
 
+def test_export_cfg_replaces_override(app, tmp_path):
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    inbox = Inbox(tmp_path / "inbox.json")
+    win = MainWindow(config, inbox)
+    inbox.add("zz", chord_id="F4L", override=True)  # F4L currently types "ing"
+    base = (
+        Path(__file__).resolve().parent.parent
+        / "sample_config_files"
+        / "test_config1.cfg"
+    )
+    out = tmp_path / "out.cfg"
+    summary = win.inbox_tab.export_cfg_to(str(base), str(out))
+    assert out.exists()
+    assert "reassigned" in summary
+    macros = cfg_io.macros_in(out.read_bytes())
+    assert macros[cfg_io.chord_to_combo(parse_chord_spec("F4L"))] == "zz"
+    assert inbox.find("zz").status == "exported"
+    # Chord count unchanged: one record was swapped, not added.
+    assert cfg_io.parse_cfg(out.read_bytes()).num_chords == 145
+
+
 def test_chord_editor_adds_to_queue(app, tmp_path):
     config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
     inbox = Inbox(tmp_path / "inbox.json")
@@ -278,16 +311,25 @@ def test_chord_editor_adds_to_queue(app, tmp_path):
     assert ed.keyboard.selected() == (frozenset(), frozenset())
 
 
-def test_chord_editor_rejects_used_chord(app, tmp_path):
+def test_chord_editor_reassigns_used_chord(app, tmp_path, monkeypatch):
     config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
     inbox = Inbox(tmp_path / "inbox.json")
     win = MainWindow(config, inbox)
     ed = win.chord_editor_tab
     ed.text_edit.setText("zz")
     ed.keyboard.set_active_keys(fingers=frozenset({(2, "M"), (3, "R"), (4, "R")}))
-    ed.add_to_queue()  # that chord already types "or"
+
+    # Cancelling adds nothing.
+    monkeypatch.setattr(ed, "_confirm_reassign", lambda used, text: False)
+    ed.add_to_queue()
     assert inbox.find("zz") is None
-    assert "already on the device" in ed.status.text()
+
+    # Confirming queues it as a reassignment.
+    monkeypatch.setattr(ed, "_confirm_reassign", lambda used, text: True)
+    ed.add_to_queue()
+    item = inbox.find("zz")
+    assert item is not None
+    assert item.override is True
 
 
 def test_chord_editor_reserved_panel(app, tmp_path):

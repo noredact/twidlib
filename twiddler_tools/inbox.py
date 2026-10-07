@@ -46,6 +46,7 @@ class Inbox:
                 text=item["text"],
                 status=_migrate_status(item.get("status", "pending")),
                 chord_id=item.get("chord_id"),
+                override=item.get("override", False),
                 created_at=item.get("created_at", ""),
                 notes=item.get("notes", ""),
             )
@@ -61,6 +62,7 @@ class Inbox:
                     "text": item.text,
                     "status": item.status,
                     "chord_id": item.chord_id,
+                    "override": item.override,
                     "created_at": item.created_at,
                     "notes": item.notes,
                 }
@@ -70,7 +72,11 @@ class Inbox:
         self.path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def add(
-        self, text: str, notes: str = "", chord_id: str | None = None
+        self,
+        text: str,
+        notes: str = "",
+        chord_id: str | None = None,
+        override: bool = False,
     ) -> PendingChord:
         if not text:
             raise ValueError("pair text cannot be empty")
@@ -81,6 +87,7 @@ class Inbox:
             text=text,
             notes=notes,
             chord_id=chord_id,
+            override=override,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         self._items.append(item)
@@ -109,8 +116,9 @@ class Inbox:
         text: str,
         new_text: str | None = None,
         chord_id: str | None = None,
+        override: bool | None = None,
     ) -> PendingChord | None:
-        """Update an existing item's text and/or chord.
+        """Update an existing item's text, chord, and/or override flag.
 
         Any change resets the item to "pending", since the exported .cfg no
         longer matches it.
@@ -124,6 +132,9 @@ class Inbox:
             changed = True
         if chord_id is not None and chord_id != item.chord_id:
             item.chord_id = chord_id
+            changed = True
+        if override is not None and override != item.override:
+            item.override = override
             changed = True
         if changed:
             item.status = "pending"

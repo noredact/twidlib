@@ -394,6 +394,64 @@ def add_macros(base: bytes, additions: list[tuple[Chord, str]]) -> bytes:
     return bytes(out)
 
 
+def replace_macros(base: bytes, replacements: list[tuple[Chord, str]]) -> bytes:
+    """Reassign existing chords in a base v7 `.cfg` to new macro text.
+
+    Each replacement is a chord already bound in `base`; its record is swapped
+    for a macro record emitting the new text. Everything else (header, other
+    records, existing macro table entries) is preserved byte-for-byte.
+    """
+    cfg = parse_cfg(base)
+    data = bytearray(base)
+
+    records_end = HEADER_SIZE + cfg.num_chords * RECORD_SIZE
+    existing_table = bytes(data[records_end:])
+    existing_combos = {r.combo for r in cfg.records}
+
+    rep_map: dict[int, str] = {}
+    for chord, text in replacements:
+        combo = chord_to_combo(chord)
+        if combo == 0:
+            raise ValueError(f"chord has no keys: {chord.chord_id}")
+        if combo not in existing_combos:
+            raise ValueError(
+                f"chord not bound in base config: {chord.chord_id}"
+            )
+        rep_map[combo] = text
+
+    kept = [
+        bytes(data[HEADER_SIZE + i * RECORD_SIZE : HEADER_SIZE + (i + 1) * RECORD_SIZE])
+        for i, r in enumerate(cfg.records)
+        if r.combo not in rep_map
+    ]
+
+    new_entries = b""
+    new_records = b""
+    for combo, text in rep_map.items():
+        offset = len(existing_table) + len(new_entries)
+        new_entries += macro_encode(text)
+        new_records += (
+            struct.pack("<I", combo)
+            + bytes([OP_MACRO])
+            + struct.pack("<H", offset)
+            + b"\x00"
+        )
+
+    all_records = b"".join(kept) + new_records
+    chunks = [
+        all_records[i : i + RECORD_SIZE] for i in range(0, len(all_records), RECORD_SIZE)
+    ]
+    chunks.sort(key=lambda ch: struct.unpack_from("<I", ch, 0)[0])
+    sorted_records = b"".join(chunks)
+
+    out = bytearray(
+        bytes(data[:HEADER_SIZE]) + sorted_records + existing_table + new_entries
+    )
+    struct.pack_into("<H", out, 2, len(out))
+    struct.pack_into("<H", out, 8, cfg.num_chords)
+    return bytes(out)
+
+
 # --- CSV/config -> .cfg encoder -------------------------------------------
 
 _MOD_BITS = {
