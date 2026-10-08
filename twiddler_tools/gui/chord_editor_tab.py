@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QHBoxLayout,
     QLabel,
@@ -52,6 +53,9 @@ class ChordEditorTab(QWidget):
         self.text_edit.setPlaceholderText("e.g. ing, or, the , or a single space")
         self.text_edit.returnPressed.connect(self.add_to_queue)
         row.addWidget(self.text_edit, 1)
+        self.mirror_cb = QCheckBox("Mirror")
+        self.mirror_cb.toggled.connect(self.toggle_mirror)
+        row.addWidget(self.mirror_cb)
         layout.addLayout(row)
 
         special_row = QHBoxLayout()
@@ -91,6 +95,9 @@ class ChordEditorTab(QWidget):
 
     def set_scale(self, factor: float) -> None:
         self.keyboard.set_scale(factor)
+
+    def toggle_mirror(self, checked: bool) -> None:
+        self.keyboard.set_mirror(checked)
 
     def _selected_chord(self):
         thumbs, fingers = self.keyboard.selected()

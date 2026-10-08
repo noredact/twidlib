@@ -106,6 +106,18 @@ def test_mirror_toggle(app, tmp_path):
     assert win.lookup_tab.keyboard._mirror is True
 
 
+def test_chord_editor_mirror_toggle(app, tmp_path):
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    inbox = Inbox(tmp_path / "inbox.json")
+    win = MainWindow(config, inbox)
+    ed = win.chord_editor_tab
+    assert ed.keyboard._mirror is False
+    ed.mirror_cb.setChecked(True)
+    assert ed.keyboard._mirror is True
+    ed.mirror_cb.setChecked(False)
+    assert ed.keyboard._mirror is False
+
+
 def test_inbox_flags_on_device(app, tmp_path):
     config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
     inbox = Inbox(tmp_path / "inbox.json")
