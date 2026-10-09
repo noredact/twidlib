@@ -7,6 +7,7 @@ name = "twiddler-tools"
 version = "0.1.0"
 description = "Tooling around the TekGear Twiddler 4 chording keyboard"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [
     "platformdirs>=4",

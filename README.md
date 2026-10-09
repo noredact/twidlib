@@ -52,3 +52,7 @@ pytest
 The test suite uses small synthetic CSV, JSON, and `.cfg` fixtures. Replace
 them with your own tuner exports when testing against a personal configuration;
 do not commit personal device configurations.
+
+## License
+
+TwidLib is released under the [MIT License](LICENSE).
