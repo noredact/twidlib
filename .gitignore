@@ -25,8 +25,3 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# Personal device configs (not part of the repo)
-current_config_files/
-
-# Local agent instructions (kept out of the repo)
-AGENTS.md
