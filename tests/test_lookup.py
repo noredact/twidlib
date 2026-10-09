@@ -23,8 +23,9 @@ def config():
 
 def test_exact_match_case_insensitive(config):
     res = find_by_text(config, "OR")
-    assert len(res) == 1
+    assert res
     assert res[0].action.typed_text == "or"
+    assert any(b.action.typed_text == "or" for b in res)
 
 
 def test_multiple_matches(config):
@@ -32,10 +33,17 @@ def test_multiple_matches(config):
     assert len(res) == 3
 
 
-def test_exact_prefers_over_substring(config):
-    # "ion" exists exactly, so substring matches (e.g. "tion") must not appear
+def test_exact_match_is_first_but_partial_matches_remain(config):
     res = find_by_text(config, "ion")
-    assert res and all(b.action.typed_text == "ion" for b in res)
+    outputs = [b.action.typed_text.lower() for b in res]
+    assert outputs[0] == "ion"
+    assert "tion" in outputs
+
+
+def test_partial_query_includes_exact_and_longer_outputs(config):
+    outputs = [b.action.typed_text.lower() for b in find_by_text(config, "i")]
+    assert "i" in outputs
+    assert "ing" in outputs
 
 
 def test_no_match(config):

@@ -71,8 +71,22 @@ def test_lookup_ing_shows_chord(app, tmp_path):
     inbox = Inbox(tmp_path / "inbox.json")
     win = MainWindow(config, inbox)
     win.lookup_tab.query_edit.setText("ing")
-    assert win.lookup_tab.results.count() == 1
+    assert win.lookup_tab.results.count() >= 1
+    assert "[KB]ing" in win.lookup_tab.results.item(0).text()
     assert win.lookup_tab.keyboard._fingers == frozenset({(4, "L")})
+
+
+def test_lookup_partial_query_shows_longer_outputs(app, tmp_path):
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    inbox = Inbox(tmp_path / "inbox.json")
+    win = MainWindow(config, inbox)
+    win.lookup_tab.query_edit.setText("i")
+    outputs = [
+        win.lookup_tab.results.item(row).text().lower()
+        for row in range(win.lookup_tab.results.count())
+    ]
+    assert any("[kb]i" in output for output in outputs)
+    assert any("[kb]ing" in output for output in outputs)
 
 
 def test_lookup_t_shows_chord(app, tmp_path):
@@ -81,7 +95,7 @@ def test_lookup_t_shows_chord(app, tmp_path):
     inbox = Inbox(tmp_path / "inbox.json")
     win = MainWindow(config, inbox)
     win.lookup_tab.query_edit.setText("t")
-    assert win.lookup_tab.results.count() == 1
+    assert win.lookup_tab.results.count() > 1
     assert "[KB]t" in win.lookup_tab.results.item(0).text()
     assert win.lookup_tab.keyboard._fingers == frozenset({(2, "M"), (3, "M")})
 

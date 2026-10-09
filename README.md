@@ -51,5 +51,4 @@ pytest
 
 The test suite is grounded in the bundled samples
 (`test_config.csv`, `test_config.cfg`, and `sample_config_files/`),
-which are the authoritative format references — see `AGENTS.md` for the project's
-ground-truth rules.
+which are the authoritative format references used by the parser and tests.

@@ -6,19 +6,21 @@ from .model import ActionKind, Binding, Chord, Config, FingerKey, KeySegment
 
 
 def find_by_text(config: Config, query: str) -> list[Binding]:
-    """Return bindings whose keyboard output matches the query.
+    """Return keyboard bindings whose output contains the query.
 
-    Matching is case-insensitive. Exact output-text matches are returned when
-    any exist; otherwise substring matches are returned.
+    Matching is case-insensitive. Exact matches are ordered first, followed by
+    other substring matches, so typing a prefix continues to show longer
+    outputs even when an exact output also exists.
     """
     q = query.strip().lower()
     if not q:
         return []
     keyboard = [b for b in config.bindings if b.action.kind is ActionKind.KEYBOARD]
-    exact = [b for b in keyboard if b.action.typed_text.lower() == q]
-    if exact:
-        return exact
-    return [b for b in keyboard if q in b.action.typed_text.lower()]
+    matches = [b for b in keyboard if q in b.action.typed_text.lower()]
+    return sorted(
+        matches,
+        key=lambda b: b.action.typed_text.lower() != q,
+    )
 
 
 def find_by_chord(config: Config, chord: Chord) -> list[Binding]:
