@@ -1,8 +1,5 @@
 """Export a config to the tuner's custom-mapping JSON format.
 
-Grounded in the repo-root file
-'test_json.json'.
-
 Chord code format:
   * Thumbs: an optional 'T<digits>+' prefix (digits from 0-4), omitted when no
     thumb keys are pressed.

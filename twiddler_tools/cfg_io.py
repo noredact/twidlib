@@ -1,7 +1,7 @@
 """Twiddler v7 `.cfg` binary config — parse and write.
 
-Format facts (grounded in the V5 spec PDF, the reference Rust implementation
-`DDRBoxman/twiddler-cfg`, and the paired samples in `sample_config_files/`):
+Format facts are implemented from the v7 format research and exercised with
+synthetic fixtures in the test suite:
 
 Header (0x80 bytes):
   00-03  4 bytes: tag/checksum + file length. Bytes 2-3 hold the file length

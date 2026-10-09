@@ -60,7 +60,8 @@ def test_code_to_chord_round_trip():
 
 def test_mirror_json_round_trip():
     data = json.loads(MIRROR.read_text(encoding="utf-8"))
-    assert len(data["chords"]) > 100
+    assert len(data["chords"]) == 3
+    assert data["chords"][0] == {"chord": "OOOL", "key": "fixture"}
     for entry in data["chords"]:
         chord = code_to_chord(entry["chord"])
         assert chord_to_code(chord) == entry["chord"]

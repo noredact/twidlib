@@ -49,6 +49,6 @@ pip install -e ".[dev]"
 pytest
 ```
 
-The test suite is grounded in the bundled samples
-(`test_config.csv`, `test_config.cfg`, and `sample_config_files/`),
-which are the authoritative format references used by the parser and tests.
+The test suite uses small synthetic CSV, JSON, and `.cfg` fixtures. Replace
+them with your own tuner exports when testing against a personal configuration;
+do not commit personal device configurations.

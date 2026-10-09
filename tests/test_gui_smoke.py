@@ -223,7 +223,7 @@ def test_special_key_dropdown_capslock(app, tmp_path):
     assert idx >= 0
     combo.setCurrentIndex(idx)
     assert win.lookup_tab.results.count() == 1
-    assert win.lookup_tab.keyboard._fingers == frozenset({(1, "R"), (3, "R"), (4, "R")})
+    assert win.lookup_tab.keyboard._fingers == frozenset({(3, "R")})
 
 
 def test_special_key_dropdown_system(app, tmp_path):
@@ -314,7 +314,7 @@ def test_export_cfg_replaces_override(app, tmp_path):
     assert macros[cfg_io.chord_to_combo(parse_chord_spec("F4L"))] == "zz"
     assert inbox.find("zz").status == "exported"
     # Chord count unchanged: one record was swapped, not added.
-    assert cfg_io.parse_cfg(out.read_bytes()).num_chords == 145
+    assert cfg_io.parse_cfg(out.read_bytes()).num_chords == len(config.bindings)
 
 
 def test_chord_editor_adds_to_queue(app, tmp_path):
@@ -620,6 +620,6 @@ def test_csv_to_cfg_exports(app, tmp_path, monkeypatch):
     win.config_tab.csv_to_cfg()
 
     assert out.exists()
-    assert "146 chord" in win.config_tab.export_label.text()
+    assert f"{len(config.bindings)} chord" in win.config_tab.export_label.text()
     back = cfg_io.cfg_to_config(cfg_io.parse_cfg(out.read_bytes()))
-    assert len(back.bindings) == 146
+    assert len(back.bindings) == len(config.bindings)

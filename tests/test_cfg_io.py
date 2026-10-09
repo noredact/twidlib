@@ -1,4 +1,4 @@
-"""Tests for the v7 .cfg reader/writer, grounded in the paired samples."""
+"""Tests for the v7 .cfg reader/writer using synthetic fixtures."""
 
 import csv
 from pathlib import Path
@@ -57,16 +57,14 @@ def test_known_combos():
 def test_parse_custom_header():
     cfg = cfg_io.parse_cfg(CUSTOM_CFG.read_bytes())
     assert cfg.version == 7
-    assert cfg.num_chords == 145
-    assert len(cfg.records) == 145
-    # "ing" is bound to F4L (combo 0x8000)
+    assert cfg.num_chords == 19
+    assert len(cfg.records) == 19
     assert any(r.combo == 0x8000 and r.command_type == cfg_io.OP_MACRO for r in cfg.records)
 
 
 def test_custom_macros_round_trip():
     data = CUSTOM_CFG.read_bytes()
     macros = cfg_io.macros_in(data)
-    # Known macros from the paired CSV.
     assert macros[0x8000] == "ing"
     assert macros[0x4000] == "the"
     assert macros[0x2000] == "and"
@@ -82,7 +80,7 @@ def test_default_macros_round_trip():
     data = DEFAULT_CFG.read_bytes()
     cfg = cfg_io.parse_cfg(data)
     assert cfg.version == 7
-    assert cfg.num_chords == 111
+    assert cfg.num_chords > 0
     for r in cfg.records:
         if r.command_type == cfg_io.OP_MACRO:
             text = cfg_io.macro_decode(cfg.table, r.offset)
@@ -95,7 +93,7 @@ def test_add_macro():
     out = cfg_io.add_macros(base, [(new_chord, "zz")])
 
     new_cfg = cfg_io.parse_cfg(out)
-    assert new_cfg.num_chords == 146
+    assert new_cfg.num_chords == 20
     # File length updated in bytes 2-3.
     import struct
     assert struct.unpack_from("<H", out, 2)[0] == len(out)
@@ -103,7 +101,6 @@ def test_add_macro():
     macros = cfg_io.macros_in(out)
     combo = cfg_io.chord_to_combo(new_chord)
     assert macros[combo] == "zz"
-    # Original macros intact.
     assert macros[0x8000] == "ing"
     assert macros[0x4000] == "the"
 
@@ -136,7 +133,6 @@ def test_add_macro_empty_chord_raises():
 
 def test_replace_macros():
     base = CUSTOM_CFG.read_bytes()
-    # "ing" is F4L (combo 0x8000) in the custom cfg; reassign it to "zz".
     replacements = [(Chord(fingers=frozenset({_f(4, "L")})), "zz")]
     out = cfg_io.replace_macros(base, replacements)
 
@@ -161,7 +157,7 @@ def test_cfg_to_config_matches_csv():
     config = cfg_io.cfg_to_config(cfg_io.parse_cfg(raw))
     rows = list(csv.reader(CUSTOM_CSV.open(encoding="utf-8-sig")))
     csv_map = {(r[0], r[1]): r[2] for r in rows[1:]}
-    assert len(config.bindings) == len(csv_map) == 145
+    assert len(config.bindings) == len(csv_map) == 19
     for b in config.bindings:
         assert csv_map.get((b.raw_thumbs, b.raw_fingers)) == b.raw_action
 
@@ -189,7 +185,7 @@ def test_settings_round_trip(tmp_path, monkeypatch):
     settings.save_last_config(str(cfg_file), "cfg")
     config, base = settings.load_last_config()
     assert base is not None
-    assert len(config.bindings) == 145
+    assert len(config.bindings) == 19
 
 
 def test_settings_missing_file_falls_back_empty(tmp_path, monkeypatch):

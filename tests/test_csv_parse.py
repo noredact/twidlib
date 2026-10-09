@@ -18,7 +18,7 @@ def _find(config, text):
 
 
 def test_parses_expected_count(config):
-    assert len(config.bindings) == 146
+    assert len(config.bindings) == 19
 
 
 def test_or_chord(config):
@@ -73,7 +73,7 @@ def test_mr_expansion(config):
 
 
 def test_the_has_three_bindings(config):
-    # "the" (4M), "<RShift>t</RShift>he" (2+4M and 4+4M) all type "the"/"The"
+    # The synthetic fixture exercises duplicate text outputs.
     assert len(_find(config, "the")) == 3
 
 

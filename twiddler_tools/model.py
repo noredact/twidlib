@@ -1,9 +1,4 @@
-"""Canonical data model for Twiddler 4 configuration bindings.
-
-Everything here is grounded in the tuner CSV export (see the repo-root
-test_config.csv). Nothing about the Twiddler format is taken from
-memory; see AGENTS.md ground-truth rules.
-"""
+"""Canonical data model for Twiddler 4 configuration bindings."""
 
 from __future__ import annotations
 
