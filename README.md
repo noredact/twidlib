@@ -53,6 +53,11 @@ The test suite uses small synthetic CSV, JSON, and `.cfg` fixtures. Replace
 them with your own tuner exports when testing against a personal configuration;
 do not commit personal device configurations.
 
+
+## Known Issue
+
+Once uploaded to the tuner, you have to open it in the tuner, save, then download. Directly downloading to twiddler without doing this step sometimes fails (gives a red led then auto-switches to next available configuration).
+
 ## License
 
 TwidLib is released under the [MIT License](LICENSE).
