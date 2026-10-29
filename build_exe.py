@@ -1,12 +1,17 @@
-"""Build a standalone Windows Twiddler4Tools.exe with PyInstaller.
+"""Build a standalone Twiddler4Tools app with PyInstaller.
 
 Usage:
 
     python build_exe.py
 
+Output depends on the host operating system:
+
+    Windows  ->  dist/Twiddler4Tools.exe
+    macOS    ->  dist/Twiddler4Tools.dmg  (plus a Twiddler4Tools.app bundle)
+    Linux    ->  dist/Twiddler4Tools
+
 Requires PyInstaller and the project dependencies (PySide6-Essentials and
-platformdirs) to be installed in the active Python environment. The output
-is written to ``dist/Twiddler4Tools.exe``.
+platformdirs) to be installed in the active Python environment.
 """
 
 from __future__ import annotations
@@ -42,6 +47,50 @@ def _ensure_dependencies() -> None:
         )
 
 
+def _pyinstaller_args(root: Path, entry: Path) -> list[str]:
+    args = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--clean",
+        "--windowed",
+        "--name",
+        APP_NAME,
+        "--paths",
+        str(root),
+        "--specpath",
+        str(entry.parent),
+        str(entry),
+    ]
+    # Windows/Linux use a single-file bundle; on macOS PyInstaller emits a
+    # .app bundle when --windowed is used without --onefile.
+    if sys.platform != "darwin":
+        args.insert(args.index("--windowed"), "--onefile")
+    return args
+
+
+def _make_dmg(root: Path) -> Path:
+    app = root / "dist" / f"{APP_NAME}.app"
+    dmg = root / "dist" / f"{APP_NAME}.dmg"
+    subprocess.run(
+        [
+            "hdiutil",
+            "create",
+            "-volname",
+            APP_NAME,
+            "-srcfolder",
+            str(app),
+            "-ov",
+            "-format",
+            "UDZO",
+            str(dmg),
+        ],
+        check=True,
+    )
+    return dmg
+
+
 def main() -> int:
     _ensure_dependencies()
 
@@ -49,31 +98,23 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         entry = Path(tmp) / "_twiddler_entry.py"
         entry.write_text(_ENTRY_SOURCE, encoding="utf-8")
-
-        cmd = [
-            sys.executable,
-            "-m",
-            "PyInstaller",
-            "--noconfirm",
-            "--clean",
-            "--onefile",
-            "--windowed",
-            "--name",
-            APP_NAME,
-            "--paths",
-            str(root),
-            str(entry),
-        ]
+        cmd = _pyinstaller_args(root, entry)
         print("Running:", " ".join(cmd))
         result = subprocess.run(cmd, cwd=root)
         if result.returncode != 0:
             return result.returncode
 
-    exe = root / "dist" / f"{APP_NAME}.exe"
-    if exe.exists():
-        print(f"\nBuilt {exe}")
+    if sys.platform == "darwin":
+        artifact = _make_dmg(root)
+    elif sys.platform.startswith("win"):
+        artifact = root / "dist" / f"{APP_NAME}.exe"
+    else:
+        artifact = root / "dist" / APP_NAME
+
+    if artifact.exists():
+        print(f"\nBuilt {artifact}")
         return 0
-    print("\nBuild finished but the exe was not found in dist/.")
+    print(f"\nBuild finished but {artifact.name} was not found in dist/.")
     return 1
 
 

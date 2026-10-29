@@ -33,18 +33,45 @@ of a new pairing.
 Both Python packages are declared runtime dependencies and are installed
 automatically by `pip install -e .`.
 
-## Install & run
+## Install & run (from source)
+
+The app needs Python 3.10+ plus the project's runtime dependencies, which are
+installed automatically by the steps below. Pick your operating system.
+
+### Windows
+
+Use the standard [python.org](https://www.python.org/downloads/windows/)
+installer (not the Microsoft Store alias or an MSYS2/mingw build). In PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -e .
+.\.venv\Scripts\python -m twiddler_tools.gui.app
+```
+
+### macOS
+
+Use the [python.org](https://www.python.org/downloads/macos/) installer or
+Homebrew (`brew install python`). In Terminal:
 
 ```sh
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -e .
 twiddler-tools
 ```
 
-Or run directly without installing:
+### Linux
 
 ```sh
-python -m twiddler_tools.gui.app
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+twiddler-tools
 ```
+
+You can also run without activating the environment by replacing
+`twiddler-tools` with `python -m twiddler_tools.gui.app`.
 
 ## Development
 
@@ -58,24 +85,49 @@ them with your own tuner exports when testing against a personal configuration;
 do not commit personal device configurations.
 
 
-## Build the Windows .exe
+## Build a standalone app
 
-A standalone `Twiddler4Tools.exe` can be produced with PyInstaller:
+`build_exe.py` bundles the app with PyInstaller:
 
 ```sh
 pip install -e ".[build]"
 python build_exe.py
 ```
 
-The executable is written to `dist/Twiddler4Tools.exe`. The build script
-expects `PySide6-Essentials`, `platformdirs`, and `PyInstaller` to be
-available in the active Python environment; the editable install above
-installs the runtime dependencies and the `[build]` extra adds PyInstaller.
+Output depends on your operating system:
 
-The resulting single-file exe has no console window (it is built with
-PyInstaller's `--windowed` flag), so run it from a terminal if you need to
-see startup errors.
+| OS      | Output                                               |
+|---------|------------------------------------------------------|
+| Windows | `dist/Twiddler4Tools.exe`                             |
+| macOS   | `dist/Twiddler4Tools.dmg` (plus `Twiddler4Tools.app`) |
+| Linux   | `dist/Twiddler4Tools`                                 |
 
+On macOS the `.dmg` is created from the `.app` bundle and can be dragged into
+`/Applications`. The build uses PyInstaller's `--windowed` flag, so the
+Windows exe has no console window; run it from a terminal if you need to see
+startup errors.
+
+The GitHub Actions `build-macos` workflow builds and verifies the macOS app on
+every push and uploads the resulting `.dmg` as a workflow artifact.
+
+
+## Troubleshooting
+
+- **`pip install PySide6-Essentials` reports "No matching distribution found"** —
+  you are using a non-standard Python (for example an MSYS2/mingw build).
+  PySide6 only publishes standard platform wheels, so install the standard
+  CPython from python.org and create a fresh virtual environment with it.
+- **macOS: the app won't open because of an "unidentified developer"** —
+  right-click the app in Finder and choose **Open**, or clear the quarantine
+  flag:
+  ```sh
+  xattr -dr com.apple.quarantine /Applications/Twiddler4Tools.app
+  ```
+- **The window doesn't appear** — confirm PySide6 is installed in the same
+  environment you are launching from:
+  ```sh
+  pip show PySide6-Essentials
+  ```
 
 ## Known Issue
 
