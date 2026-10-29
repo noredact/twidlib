@@ -4,7 +4,18 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import (
+    QApplication,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..inbox import Inbox
 from ..model import Config
@@ -13,6 +24,17 @@ from .chord_editor_tab import ChordEditorTab
 from .config_tab import ConfigTab
 from .inbox_tab import InboxTab
 from .lookup_tab import LookupTab
+
+_FOOTER_LINKS = (
+    ("Tuner", "https://tuner.mytwiddler.com/edit"),
+    ("Docs", "https://www.mytwiddler.com/doc/"),
+    ("Tutor", "https://tutor.mytwiddler.com/tutor2/"),
+)
+
+
+def _open_url(url: str) -> None:
+    """Open a URL in the system's default browser."""
+    QDesktopServices.openUrl(QUrl(url))
 
 
 class MainWindow(QMainWindow):
@@ -49,10 +71,38 @@ class MainWindow(QMainWindow):
         self.lookup_tab.add_output_requested.connect(self._open_chord_editor_with_chord)
         self.config_tab.scale_changed.connect(self._apply_scale)
         self.config_tab.scale_changed.connect(self._size_to_fit)
-        self.setCentralWidget(self.tabs)
+
+        self._footer_buttons: list[QPushButton] = []
+        self._footer = self._build_footer()
+
+        central = QWidget()
+        central_layout = QVBoxLayout(central)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        central_layout.setSpacing(0)
+        central_layout.addWidget(self.tabs, 1)
+        central_layout.addWidget(self._footer)
+        self.setCentralWidget(central)
 
         self._apply_scale(load_gui_scale())
         self._size_to_fit()
+
+    def _build_footer(self) -> QWidget:
+        """Build the universal footer linking to the tuner, docs, and tutor."""
+        footer = QWidget()
+        layout = QHBoxLayout(footer)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(8)
+        layout.addStretch(1)
+        layout.addWidget(QLabel("Open in browser:"))
+        for label, url in _FOOTER_LINKS:
+            btn = QPushButton(label)
+            btn.setToolTip(url)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(lambda checked=False, u=url: _open_url(u))
+            layout.addWidget(btn)
+            self._footer_buttons.append(btn)
+        layout.addStretch(1)
+        return footer
 
     def _save_current_app(self, index: int) -> None:
         save_last_app(self.tabs.tabText(index))
@@ -68,13 +118,16 @@ class MainWindow(QMainWindow):
         self.chord_editor_tab.layout().invalidate()
         self.chord_editor_tab.layout().activate()
         hint = self.tabs.sizeHint()
+        footer_hint = self._footer.sizeHint()
         screen = QApplication.primaryScreen()
         if screen is not None:
             available = screen.availableGeometry()
             width = min(hint.width(), available.width())
-            height = min(hint.height(), available.height())
+            height = min(
+                hint.height() + footer_hint.height(), available.height()
+            )
         else:
-            width, height = hint.width(), hint.height()
+            width, height = hint.width(), hint.height() + footer_hint.height()
         self.resize(width, height)
 
     def _apply_scale(self, factor: float) -> None:

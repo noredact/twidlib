@@ -19,7 +19,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox  # noqa: E402
 
 from twiddler_tools import cfg_io  # noqa: E402
 from twiddler_tools.csv_io import parse_csv  # noqa: E402
@@ -52,7 +52,7 @@ def test_main_window_constructs(app, tmp_path):
     assert win.lookup_tab is not None
     assert win.config_tab is not None
     assert win.chord_editor_tab is not None
-    assert win.centralWidget().count() == 4
+    assert win.tabs.count() == 4
 
 
 def test_main_window_defaults_to_lookup_and_persists_last_app(app, tmp_path, monkeypatch):
@@ -80,6 +80,60 @@ def test_main_window_restores_last_app_or_defaults_to_lookup(app, tmp_path, monk
     monkeypatch.setattr(app_module, "load_last_app", lambda: "Unknown Tab")
     win = MainWindow(config, Inbox(tmp_path / "inbox2.json"))
     assert win.tabs.currentWidget() is win.lookup_tab
+
+
+def test_footer_links_open_in_browser(app, tmp_path, monkeypatch):
+    from twiddler_tools.gui import app as app_module
+
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    win = MainWindow(config, Inbox(tmp_path / "inbox.json"))
+
+    assert [b.text() for b in win._footer_buttons] == ["Tuner", "Docs", "Tutor"]
+    assert win._footer.parentWidget() is win.centralWidget()
+    assert any(
+        label.text() == "Open in browser:"
+        for label in win._footer.findChildren(QLabel)
+    )
+
+    opened = []
+    monkeypatch.setattr(app_module, "_open_url", opened.append)
+    for btn in win._footer_buttons:
+        btn.click()
+
+    assert opened == [
+        "https://tuner.mytwiddler.com/edit",
+        "https://www.mytwiddler.com/doc/",
+        "https://tutor.mytwiddler.com/tutor2/",
+    ]
+
+
+def test_config_tab_default_filename_and_timestamp(app, tmp_path, monkeypatch):
+    from twiddler_tools.gui import config_tab as ct
+
+    monkeypatch.setattr(ct, "load_file_naming", lambda: ("", False, "%Y-%m-%d_%H%M%S"))
+    monkeypatch.setattr(ct, "save_file_naming", lambda *a, **k: None)
+
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    win = MainWindow(config, Inbox(tmp_path / "inbox.json"))
+    tab = win.config_tab
+
+    assert tab.default_name_edit.text() == ""
+    assert tab.append_ts_cb.isChecked() is False
+    assert tab.timestamp_combo.isEnabled() is False
+    assert tab._export_filename("twiddler_custom", ".json") == "twiddler_custom.json"
+    assert tab._export_filename("twiddler_from_csv", ".cfg") == "twiddler_from_csv.cfg"
+
+    tab.default_name_edit.setText("mylayout")
+    tab.append_ts_cb.setChecked(True)
+    tab.timestamp_combo.setCurrentIndex(tab.timestamp_combo.findData("%Y%m%d_%H%M%S"))
+    assert tab.timestamp_combo.isEnabled() is True
+
+    name = tab._export_filename("twiddler_custom", ".json")
+    prefix, suffix = "mylayout_", ".json"
+    assert name.startswith(prefix) and name.endswith(suffix)
+    stamp = name[len(prefix) : -len(suffix)]
+    assert len(stamp) == 15
+    assert stamp[:8].isdigit() and stamp[8] == "_" and stamp[9:].isdigit()
 
 
 def test_lookup_or_shows_chord(app, tmp_path):

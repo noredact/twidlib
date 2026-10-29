@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QTextBrowser,
@@ -20,9 +23,27 @@ from PySide6.QtWidgets import (
 
 from .. import cfg_io, json_io
 from ..csv_io import load_csv
-from ..settings import load_gui_scale, save_gui_scale, save_last_config
+from ..settings import (
+    DEFAULT_TIMESTAMP_FORMAT,
+    load_file_naming,
+    load_gui_scale,
+    save_file_naming,
+    save_gui_scale,
+    save_last_config,
+)
 
 _SIZES = (("Small", 0.6), ("Medium", 0.8), ("Large", 1.0))
+
+_TIMESTAMP_FORMATS = (
+    ("YYYYMMDD", "%Y%m%d"),
+    ("YYYY-MM-DD", "%Y-%m-%d"),
+    ("YYYY-MM-DD_HHMMSS", "%Y-%m-%d_%H%M%S"),
+    ("YYYYMMDD_HHMMSS", "%Y%m%d_%H%M%S"),
+    ("YYYYMMDD-HHMMSS", "%Y%m%d-%H%M%S"),
+    ("YYYY-MM-DD_HH-MM-SS", "%Y-%m-%d_%H-%M-%S"),
+    ("MM-DD-YYYY_HHMMSS", "%m-%d-%Y_%H%M%S"),
+    ("HHMMSS", "%H%M%S"),
+)
 
 _HELP_HTML = """\
 <p><i>Tip: use Ctrl+scroll to zoom this text (Ctrl + / Ctrl - zoom in/out).</i></p>
@@ -125,6 +146,41 @@ class ConfigTab(QWidget):
         self.path_label.setWordWrap(True)
         layout.addWidget(self.path_label)
 
+        name_row = QHBoxLayout()
+        name_row.addWidget(QLabel("Default file name:"))
+        self.default_name_edit = QLineEdit()
+        self.default_name_edit.setPlaceholderText("e.g. twiddler_custom")
+        self.default_name_edit.setToolTip(
+            "Base name for exported files. Leave blank to use the per-export "
+            "default; the .json/.cfg extension is added automatically."
+        )
+        name_row.addWidget(self.default_name_edit, 1)
+        layout.addLayout(name_row)
+
+        ts_row = QHBoxLayout()
+        self.append_ts_cb = QCheckBox("Append timestamp")
+        self.timestamp_combo = QComboBox()
+        for label, fmt in _TIMESTAMP_FORMATS:
+            self.timestamp_combo.addItem(label, fmt)
+        ts_row.addWidget(self.append_ts_cb)
+        ts_row.addWidget(self.timestamp_combo)
+        ts_row.addStretch(1)
+        layout.addLayout(ts_row)
+
+        name, append_ts, fmt = load_file_naming()
+        self.default_name_edit.setText(name)
+        self.append_ts_cb.setChecked(append_ts)
+        idx = self.timestamp_combo.findData(fmt)
+        self.timestamp_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.timestamp_combo.setEnabled(append_ts)
+
+        self.default_name_edit.textChanged.connect(self._save_file_naming)
+        self.append_ts_cb.toggled.connect(self._append_ts_toggled)
+        self.append_ts_cb.toggled.connect(lambda checked: self._save_file_naming())
+        self.timestamp_combo.currentIndexChanged.connect(
+            lambda _: self._save_file_naming()
+        )
+
         self.export_label = QLabel("")
         self.export_label.setWordWrap(True)
         layout.addWidget(self.export_label)
@@ -153,6 +209,27 @@ class ConfigTab(QWidget):
         factor = self.size_combo.currentData()
         save_gui_scale(factor)
         self.scale_changed.emit(factor)
+
+    def _save_file_naming(self, *args) -> None:
+        save_file_naming(
+            self.default_name_edit.text().strip(),
+            self.append_ts_cb.isChecked(),
+            self.timestamp_combo.currentData() or DEFAULT_TIMESTAMP_FORMAT,
+        )
+
+    def _append_ts_toggled(self, checked: bool) -> None:
+        self.timestamp_combo.setEnabled(checked)
+
+    def _export_filename(self, fallback_stem: str, ext: str) -> str:
+        """Build the pre-filled save name from the default-name preferences."""
+        base = self.default_name_edit.text().strip() or fallback_stem
+        path = Path(base)
+        stem = path.stem
+        suffix = path.suffix or ext
+        if self.append_ts_cb.isChecked():
+            fmt = self.timestamp_combo.currentData() or DEFAULT_TIMESTAMP_FORMAT
+            stem = f"{stem}_{datetime.now().strftime(fmt)}"
+        return f"{stem}{suffix}"
 
     @staticmethod
     def _kind_from_source(source: str) -> str | None:
@@ -213,7 +290,7 @@ class ConfigTab(QWidget):
         path, _ = QFileDialog.getSaveFileName(
             self,
             "Export custom-mapping JSON",
-            "twiddler_custom.json",
+            self._export_filename("twiddler_custom", ".json"),
             "JSON files (*.json);;All files (*)",
         )
         if not path:
@@ -281,7 +358,7 @@ class ConfigTab(QWidget):
         out_path, _ = QFileDialog.getSaveFileName(
             self,
             "Export .cfg from CSV",
-            "twiddler_from_csv.cfg",
+            self._export_filename("twiddler_from_csv", ".cfg"),
             "CFG files (*.cfg);;All files (*)",
         )
         if not out_path:

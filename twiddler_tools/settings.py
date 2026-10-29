@@ -82,3 +82,32 @@ def load_last_app() -> str:
     """Return the last-used app tab, defaulting to Chord Lookup."""
     value = _load_state().get("last_app", "Chord Lookup")
     return value if isinstance(value, str) else "Chord Lookup"
+
+
+DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%d_%H%M%S"
+
+
+def save_file_naming(name: str, append_timestamp: bool, timestamp_format: str) -> None:
+    """Persist the default export file-name preferences."""
+    _save_state(
+        {
+            "file_naming": {
+                "name": name,
+                "append_timestamp": append_timestamp,
+                "timestamp_format": timestamp_format,
+            }
+        }
+    )
+
+
+def load_file_naming() -> tuple[str, bool, str]:
+    """Return (name, append_timestamp, timestamp_format) preferences."""
+    entry = _load_state().get("file_naming")
+    if not isinstance(entry, dict):
+        return "", False, DEFAULT_TIMESTAMP_FORMAT
+    name = entry.get("name")
+    name = name if isinstance(name, str) else ""
+    append_timestamp = bool(entry.get("append_timestamp", False))
+    fmt = entry.get("timestamp_format")
+    fmt = fmt if isinstance(fmt, str) and fmt else DEFAULT_TIMESTAMP_FORMAT
+    return name, append_timestamp, fmt

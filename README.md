@@ -58,6 +58,25 @@ them with your own tuner exports when testing against a personal configuration;
 do not commit personal device configurations.
 
 
+## Build the Windows .exe
+
+A standalone `Twiddler4Tools.exe` can be produced with PyInstaller:
+
+```sh
+pip install -e ".[build]"
+python build_exe.py
+```
+
+The executable is written to `dist/Twiddler4Tools.exe`. The build script
+expects `PySide6-Essentials`, `platformdirs`, and `PyInstaller` to be
+available in the active Python environment; the editable install above
+installs the runtime dependencies and the `[build]` extra adds PyInstaller.
+
+The resulting single-file exe has no console window (it is built with
+PyInstaller's `--windowed` flag), so run it from a terminal if you need to
+see startup errors.
+
+
 ## Known Issue
 
 Once uploaded to the tuner, you have to open it in the tuner, save, then download. Directly downloading to twiddler without doing this step sometimes fails (gives a red led then auto-switches to next available configuration).

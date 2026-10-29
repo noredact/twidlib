@@ -208,6 +208,16 @@ def test_last_app_defaults_and_round_trips(tmp_path, monkeypatch):
     assert settings.load_last_app() == "Config"
 
 
+def test_file_naming_defaults_and_round_trip(tmp_path, monkeypatch):
+    from twiddler_tools import settings
+
+    monkeypatch.setattr(settings, "state_path", lambda: tmp_path / "state.json")
+
+    assert settings.load_file_naming() == ("", False, settings.DEFAULT_TIMESTAMP_FORMAT)
+    settings.save_file_naming("my-layout", True, "%Y%m%d_%H%M%S")
+    assert settings.load_file_naming() == ("my-layout", True, "%Y%m%d_%H%M%S")
+
+
 def test_config_to_cfg_round_trip():
     for path in (CUSTOM_CFG, DEFAULT_CFG):
         raw = path.read_bytes()
