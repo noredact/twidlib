@@ -55,6 +55,33 @@ def test_main_window_constructs(app, tmp_path):
     assert win.centralWidget().count() == 4
 
 
+def test_main_window_defaults_to_lookup_and_persists_last_app(app, tmp_path, monkeypatch):
+    from twiddler_tools.gui import app as app_module
+
+    saved = []
+    monkeypatch.setattr(app_module, "load_last_app", lambda: "Chord Lookup")
+    monkeypatch.setattr(app_module, "save_last_app", saved.append)
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    win = MainWindow(config, Inbox(tmp_path / "inbox.json"))
+
+    assert win.tabs.currentWidget() is win.lookup_tab
+    win.tabs.setCurrentWidget(win.config_tab)
+    assert saved == ["Config"]
+
+
+def test_main_window_restores_last_app_or_defaults_to_lookup(app, tmp_path, monkeypatch):
+    from twiddler_tools.gui import app as app_module
+
+    config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
+    monkeypatch.setattr(app_module, "load_last_app", lambda: "Chord Editor")
+    win = MainWindow(config, Inbox(tmp_path / "inbox.json"))
+    assert win.tabs.currentWidget() is win.chord_editor_tab
+
+    monkeypatch.setattr(app_module, "load_last_app", lambda: "Unknown Tab")
+    win = MainWindow(config, Inbox(tmp_path / "inbox2.json"))
+    assert win.tabs.currentWidget() is win.lookup_tab
+
+
 def test_lookup_or_shows_chord(app, tmp_path):
     config = parse_csv(SAMPLE.read_text(encoding="utf-8-sig"))
     inbox = Inbox(tmp_path / "inbox.json")

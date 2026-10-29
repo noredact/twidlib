@@ -1,4 +1,4 @@
-"""Persist the last-imported config so the app reopens where it left off."""
+"""Persist app preferences and the last-imported config."""
 
 from __future__ import annotations
 
@@ -71,3 +71,14 @@ def load_gui_scale() -> float:
         return float(value)
     except (TypeError, ValueError):
         return 1.0
+
+
+def save_last_app(name: str) -> None:
+    """Remember the last-used app tab."""
+    _save_state({"last_app": name})
+
+
+def load_last_app() -> str:
+    """Return the last-used app tab, defaulting to Chord Lookup."""
+    value = _load_state().get("last_app", "Chord Lookup")
+    return value if isinstance(value, str) else "Chord Lookup"

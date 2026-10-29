@@ -198,6 +198,16 @@ def test_settings_missing_file_falls_back_empty(tmp_path, monkeypatch):
     assert base is None
 
 
+def test_last_app_defaults_and_round_trips(tmp_path, monkeypatch):
+    from twiddler_tools import settings
+
+    monkeypatch.setattr(settings, "state_path", lambda: tmp_path / "state.json")
+
+    assert settings.load_last_app() == "Chord Lookup"
+    settings.save_last_app("Config")
+    assert settings.load_last_app() == "Config"
+
+
 def test_config_to_cfg_round_trip():
     for path in (CUSTOM_CFG, DEFAULT_CFG):
         raw = path.read_bytes()
@@ -227,8 +237,24 @@ def test_action_to_record_shifted_single_key():
 def test_action_to_record_macro():
     ctype, d0, d1, macro = cfg_io.action_to_record("[KB]<RShift>t</RShift>he")
     assert ctype == cfg_io.OP_MACRO
-    assert macro == [(0x20, 0x17), (0x00, 0x0B), (0x00, 0x08)]  # RShift+t, h, e
+    assert macro == [
+        (cfg_io.OP_KEYBOARD, 0x20, 0x17),
+        (cfg_io.OP_KEYBOARD, 0x00, 0x0B),
+        (cfg_io.OP_KEYBOARD, 0x00, 0x08),
+    ]
     assert (d0, d1) == (0, 0)  # offset is assigned later
+
+
+def test_mouse_hold_action_to_record():
+    action = "[MS]Down: Left\n[DLY]50ms[MS]Release"
+    ctype, d0, d1, macro = cfg_io.action_to_record(action)
+    assert ctype == cfg_io.OP_MACRO
+    assert (d0, d1) == (0, 0)
+    assert macro == [
+        (cfg_io.OP_MOUSE, 1, 0),
+        (cfg_io.OP_DELAY, 5, 0),
+        (cfg_io.OP_MOUSE, 0, 0),
+    ]
 
 
 def test_action_to_record_system_and_mouse():
@@ -245,6 +271,40 @@ def test_config_to_cfg_from_csv():
     csv_rows = {(b.raw_thumbs, b.raw_fingers, b.raw_action) for b in csv_config.bindings}
     back_rows = {(b.raw_thumbs, b.raw_fingers, b.raw_action) for b in back.bindings}
     assert csv_rows == back_rows
+
+
+def test_mouse_hold_csv_to_cfg_round_trip():
+    from twiddler_tools.csv_io import parse_csv
+
+    action = "[MS]Down: Left\n[DLY]50ms[MS]Release"
+    config = parse_csv(f'Thumbs,Fingers,Actions\n"",1L,"{action}"\n')
+    out = cfg_io.config_to_cfg(config, CUSTOM_CFG.read_bytes())
+    back = cfg_io.cfg_to_config(cfg_io.parse_cfg(out))
+
+    assert len(back.bindings) == 1
+    assert back.bindings[0].raw_action == action
+    cfg = cfg_io.parse_cfg(out)
+    combo = cfg_io.chord_to_combo(back.bindings[0].chord)
+    record = next(r for r in cfg.records if r.combo == combo)
+    assert record.command_type == cfg_io.OP_MACRO
+    assert cfg_io.macros_in(out)[record.combo] == action
+    assert cfg.table[record.offset : record.offset + 16] == bytes(
+        [
+            cfg_io.OP_MOUSE,
+            1,
+            0,
+            0,
+            cfg_io.OP_DELAY,
+            5,
+            0,
+            0,
+            cfg_io.OP_MOUSE,
+            0,
+            0,
+            0,
+            0, 0, 0, 0,
+        ]
+    )
 
 
 def test_config_to_cfg_rejects_unknown_action():

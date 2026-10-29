@@ -27,7 +27,11 @@ of a new pairing.
 ## Requirements
 
 - Python 3.10+
-- [PySide6](https://pypi.org/project/PySide6/)
+- [PySide6-Essentials](https://pypi.org/project/PySide6-Essentials/)
+- [platformdirs](https://pypi.org/project/platformdirs/)
+
+Both Python packages are declared runtime dependencies and are installed
+automatically by `pip install -e .`.
 
 ## Install & run
 

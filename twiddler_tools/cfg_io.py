@@ -107,26 +107,45 @@ def macro_encode(text: str) -> bytes:
 
 
 def macro_decode(table: bytes, offset: int) -> str:
-    """Decode a macro from the table at `offset` back into text."""
-    out: list[str] = []
+    """Decode a macro from the table at `offset` into its tuner action text."""
+    commands: list[tuple[int, int, int]] = []
     i = offset
     while i + 4 <= len(table):
-        op, key = struct.unpack_from("<HH", table, i)
+        op, data0, data1 = table[i], table[i + 1], table[i + 2]
         if op == 0:
             break
-        base = _KEY_TO_CHAR.get(key)
-        if op == 0x0002:
-            out.append(base if base is not None else "?")
-        elif op == 0x2002:
-            if base is None:
-                out.append("?")
-            elif base.isalpha():
-                out.append(base.upper())
+        commands.append((op, data0, data1))
+        i += 4
+    if (
+        len(commands) == 3
+        and commands[0][0] == OP_MOUSE
+        and commands[1][0] == OP_DELAY
+        and commands[2] == (OP_MOUSE, 0, 0)
+    ):
+        button = {1: "Left", 2: "Right", 4: "Middle"}.get(commands[0][1])
+        if button is not None and commands[0][2] == 0:
+            delay = (commands[1][1] | (commands[1][2] << 8)) * 10
+            return f"[MS]Down: {button}\n[DLY]{delay}ms[MS]Release"
+
+    out: list[str] = []
+    for op, data0, data1 in commands:
+        if op == OP_KEYBOARD:
+            key = data1
+            base = _KEY_TO_CHAR.get(key)
+            mod = data0
+            if mod == 0:
+                out.append(base if base is not None else "?")
+            elif mod == _MOD_BITS["RShift"]:
+                if base is None:
+                    out.append("?")
+                elif base.isalpha():
+                    out.append(base.upper())
+                else:
+                    out.append(_SHIFTED_TO_BASE.get(base, "?"))
             else:
-                out.append(_SHIFTED_TO_BASE.get(base, "?"))
+                out.append("?")
         else:
             out.append("?")
-        i += 4
     return "".join(out)
 
 
@@ -283,15 +302,28 @@ def _command_inner(mod: int, key: int) -> str:
 
 
 def _macro_inner(table: bytes, offset: int) -> str:
-    parts = []
+    commands: list[tuple[int, int, int]] = []
     i = offset
     while i + 4 <= len(table):
-        op, mod, key = table[i], table[i + 1], table[i + 2]
+        op, data0, data1 = table[i], table[i + 1], table[i + 2]
         if op == 0:
             break
-        parts.append(_command_inner(mod, key) if op == OP_KEYBOARD else f"<op{op}>")
+        commands.append((op, data0, data1))
         i += 4
-    return "".join(parts)
+    if (
+        len(commands) == 3
+        and commands[0][0] == OP_MOUSE
+        and commands[1][0] == OP_DELAY
+        and commands[2] == (OP_MOUSE, 0, 0)
+    ):
+        button = {1: "Left", 2: "Right", 4: "Middle"}.get(commands[0][1])
+        if button is not None and commands[0][2] == 0:
+            delay = (commands[1][1] | (commands[1][2] << 8)) * 10
+            return f"[MS]Down: {button}\n[DLY]{delay}ms[MS]Release"
+    return "".join(
+        _command_inner(data0, data1) if op == OP_KEYBOARD else f"<op{op}>"
+        for op, data0, data1 in commands
+    )
 
 
 def _finger_tokens(chord: Chord) -> str:
@@ -310,7 +342,8 @@ def _record_action(cfg: Cfg, r: Record) -> str:
     if r.command_type == OP_KEYBOARD:
         return "[KB]" + _command_inner(r.data0, r.data1)
     if r.command_type == OP_MACRO:
-        return "[KB]" + _macro_inner(cfg.table, r.offset)
+        inner = _macro_inner(cfg.table, r.offset)
+        return inner if inner.startswith("[MS]") else "[KB]" + inner
     if r.command_type == OP_SYSTEM:
         return SYSTEM_ACTIONS.get(r.data0, f"[SYS][?]<Command {r.data0}>")
     if r.command_type == OP_MOUSE:
@@ -551,12 +584,14 @@ def _split_commands(inner: str) -> list[tuple[int, int]]:
     return out
 
 
-def action_to_record(raw_action: str) -> tuple[int, int, int, list[tuple[int, int]] | None]:
+def action_to_record(
+    raw_action: str,
+) -> tuple[int, int, int, list[tuple[int, int, int]] | None]:
     """Encode one CSV action string into a .cfg record.
 
     Returns (command_type, data0, data1, macro_entries). `macro_entries` is
     None for non-macro records; for macro records it is the list of
-    (modifier, keycode) commands to store in the macro table.
+    (opcode, data0, data1) commands to store in the macro table.
     """
     if raw_action.startswith("[SYS]"):
         if raw_action in _SYSTEM_IDS:
@@ -571,6 +606,22 @@ def action_to_record(raw_action: str) -> tuple[int, int, int, list[tuple[int, in
         raise ValueError(f"unsupported system action: {raw_action!r}")
 
     if not raw_action.startswith("[KB]"):
+        mouse_hold = re.match(
+            r"^\[MS\]Down: (Left|Right|Middle)\r?\n"
+            r"\[DLY\](\d+)ms\[MS\]Release$",
+            raw_action,
+        )
+        if mouse_hold:
+            button = {"Left": 1, "Right": 2, "Middle": 4}[mouse_hold.group(1)]
+            delay = int(mouse_hold.group(2))
+            if delay == 0 or delay % 10 or delay > 655350:
+                raise ValueError(f"unsupported mouse hold delay: {delay}ms")
+            delay_units = delay // 10
+            return OP_MACRO, 0, 0, [
+                (OP_MOUSE, button, 0),
+                (OP_DELAY, delay_units & 0xFF, (delay_units >> 8) & 0xFF),
+                (OP_MOUSE, 0, 0),
+            ]
         raise ValueError(f"unsupported action: {raw_action!r}")
 
     commands = _split_commands(raw_action[4:])
@@ -579,7 +630,9 @@ def action_to_record(raw_action: str) -> tuple[int, int, int, list[tuple[int, in
     if len(commands) == 1:
         mod, key = commands[0]
         return OP_KEYBOARD, mod & 0xFF, key & 0xFF, None
-    return OP_MACRO, 0, 0, commands
+    return OP_MACRO, 0, 0, [
+        (OP_KEYBOARD, mod, key) for mod, key in commands
+    ]
 
 
 def config_to_cfg(config: Config, base: bytes) -> bytes:
@@ -593,7 +646,7 @@ def config_to_cfg(config: Config, base: bytes) -> bytes:
     base_cfg = parse_cfg(base)
 
     records: list[tuple[int, int, int, int]] = []
-    entries: list[list[tuple[int, int]] | None] = []
+    entries: list[list[tuple[int, int, int]] | None] = []
     for b in config.bindings:
         combo = chord_to_combo(b.chord)
         if combo == 0:
@@ -609,8 +662,8 @@ def config_to_cfg(config: Config, base: bytes) -> bytes:
     for (combo, ctype, d0, d1), macro in ordered:
         if ctype == OP_MACRO:
             offset = len(table)
-            for mod, key in macro:
-                table += bytes([OP_KEYBOARD, mod & 0xFF, key & 0xFF, 0])
+            for op, data0, data1 in macro:
+                table += bytes([op, data0 & 0xFF, data1 & 0xFF, 0])
             table += b"\x00\x00\x00\x00"
             d0, d1 = offset & 0xFF, (offset >> 8) & 0xFF
         out_records += struct.pack("<I", combo) + bytes([ctype, d0, d1, 0])

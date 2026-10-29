@@ -90,7 +90,7 @@ def config_to_custom_json(config: Config) -> tuple[dict, list[str]]:
     skipped: list[str] = []
     for b in config.bindings:
         if b.action.kind is not ActionKind.KEYBOARD:
-            skipped.append(f"{b.raw_action} (system action)")
+            skipped.append(f"{b.raw_action} (non-keyboard action)")
             continue
         try:
             code = chord_to_code(b.chord)

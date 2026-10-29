@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
 
 from ..inbox import Inbox
 from ..model import Config
-from ..settings import load_gui_scale, load_last_config
+from ..settings import load_gui_scale, load_last_app, load_last_config, save_last_app
 from .chord_editor_tab import ChordEditorTab
 from .config_tab import ConfigTab
 from .inbox_tab import InboxTab
@@ -31,6 +31,14 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.chord_editor_tab, "Chord Editor")
         self.tabs.addTab(self.lookup_tab, "Chord Lookup")
         self.tabs.addTab(self.config_tab, "Config")
+        self._app_tabs = {
+            "Export Queue": self.inbox_tab,
+            "Chord Editor": self.chord_editor_tab,
+            "Chord Lookup": self.lookup_tab,
+            "Config": self.config_tab,
+        }
+        self.tabs.setCurrentWidget(self._app_tabs.get(load_last_app(), self.lookup_tab))
+        self.tabs.currentChanged.connect(self._save_current_app)
 
         self.config_tab.config_changed.connect(self.lookup_tab.refresh_config)
         self.config_tab.config_changed.connect(self.inbox_tab.set_config)
@@ -45,6 +53,9 @@ class MainWindow(QMainWindow):
 
         self._apply_scale(load_gui_scale())
         self._size_to_fit()
+
+    def _save_current_app(self, index: int) -> None:
+        save_last_app(self.tabs.tabText(index))
 
     def _size_to_fit(self) -> None:
         """Size the window to show the full keymap at the current scale.

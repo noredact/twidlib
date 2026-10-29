@@ -68,7 +68,8 @@ software.</li>
 <p><b>CSV to .cfg\u2026</b> rebuilds a .cfg from an edited CSV. It treats the CSV
 as the complete config (every row becomes a binding) and takes only the
 settings/header from a base .cfg. Use it to turn a tuner-exported CSV that
-you\u2019ve edited into a file you can upload to the tuner.</p>
+you\u2019ve edited into a file you can upload to the tuner. Mouse-down/delay/release
+sequences are supported when the delay is a positive multiple of 10 ms.</p>
 """
 
 

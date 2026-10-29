@@ -16,6 +16,7 @@ THUMB_KEYS = (0, 1, 2, 3, 4)
 class ActionKind(str, Enum):
     KEYBOARD = "keyboard"
     SYSTEM = "system"
+    MOUSE = "mouse"
 
 
 @dataclass(frozen=True, order=True)
@@ -151,13 +152,17 @@ class PendingChord:
 
 _SYS_RE = re.compile(r"^\[SYS\]\[(?P<sub>[^\]]+)\]<(?P<cmd>.+)>$")
 _KB_RE = re.compile(r"^\[KB\](?P<inner>.*)$", re.DOTALL)
+_MOUSE_HOLD_RE = re.compile(
+    r"^\[MS\]Down: (?P<button>Left|Right|Middle)\r?\n"
+    r"\[DLY\](?P<delay>\d+)ms\[MS\]Release$"
+)
 
 
 def parse_action(raw: str) -> Action:
     """Parse a tuner action string into an Action.
 
-    Two families are observed: '[KB]...' (keyboard) and
-    '[SYS][Subsystem]<Command>' (system). [VERIFIED]
+    Recognized forms are '[KB]...' (keyboard), '[SYS][Subsystem]<Command>'
+    (system), and mouse-down/delay/release sequences.
     """
     m = _SYS_RE.match(raw)
     if m:
@@ -166,6 +171,17 @@ def parse_action(raw: str) -> Action:
             kind=ActionKind.SYSTEM,
             subsystem=m.group("sub"),
             command=m.group("cmd"),
+        )
+    m = _MOUSE_HOLD_RE.match(raw)
+    if m:
+        delay = int(m.group("delay"))
+        if delay == 0 or delay % 10 or delay > 655350:
+            raise ValueError(f"unsupported mouse hold delay: {delay}ms")
+        return Action(
+            raw=raw,
+            kind=ActionKind.MOUSE,
+            subsystem="Mouse",
+            command=f"{m.group('button')} hold for {delay}ms",
         )
     m = _KB_RE.match(raw)
     if m:
